@@ -41,7 +41,7 @@ export default function OutfitDetailScreen({ route, navigation }) {
         scale: s?.scale ?? initial.scale,
         offsetX: s?.offsetX ?? (initial.offsetX || 0),
         offsetY: s?.offsetY ?? (initial.offsetY || 0),
-        locked: true,
+        locked: false,
       };
     });
     return settings;
