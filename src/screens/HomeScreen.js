@@ -4,13 +4,20 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Share } from 'react-native';
+import { View, Text, TouchableOpacity, Share, Image, ScrollView, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { getClothingItems } from '../services/clothingService';
+import { getOutfits } from '../services/outfitService';
 import { COLORS } from '../constants/theme';
 import { useAppScale } from '../utils/responsive';
 import ScreenWrapper from '../components/ScreenWrapper';
+import Skeleton from '../components/Skeleton';
+import { impact } from '../utils/haptics';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // ── Categorías para armado de outfits ─────────────────────────
 
@@ -42,14 +49,23 @@ export default function HomeScreen() {
   const { scale, fontScale } = useAppScale();
   const { user } = useAuth();
   const [items, setItems] = useState([]);
+  const [outfits, setOutfits] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [outfit, setOutfit] = useState(null);
 
   const loadItems = async () => {
     try {
-      const data = await getClothingItems(user.id);
+      const [data, o] = await Promise.all([
+        getClothingItems(user.id),
+        getOutfits(user.id),
+      ]);
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setItems(data);
-    } catch (_) {}
+      setOutfits(o);
+    } catch (_) {} finally {
+      setLoading(false);
+    }
   };
 
   const onRefresh = async () => {
@@ -70,6 +86,7 @@ export default function HomeScreen() {
   }, [items]);
 
   const handleRefreshOutfit = () => {
+    impact.light();
     setOutfit(generateOutfit(items));
   };
 
@@ -101,6 +118,24 @@ export default function HomeScreen() {
 
   // ── Render ──────────────────────────────────────────────────
 
+  if (loading) {
+    return (
+      <ScreenWrapper>
+        {/* Title skeleton */}
+        <Skeleton width={160} height={26} borderRadius={6} style={{ marginTop: S(8), marginBottom: S(4) }} />
+        <Skeleton width={140} height={14} borderRadius={6} style={{ marginBottom: S(24) }} />
+        {/* Stats skeleton */}
+        <View style={{ flexDirection: 'row', gap: S(10), marginBottom: S(24) }}>
+          {[1, 2, 3].map((_, i) => (
+            <Skeleton key={i} style={{ flex: 1 }} height={100} borderRadius={14} />
+          ))}
+        </View>
+        {/* Card skeleton */}
+        <Skeleton.Card />
+      </ScreenWrapper>
+    );
+  }
+
   return (
     <ScreenWrapper scrollable refreshing={refreshing} onRefresh={onRefresh}>
       {/* Título */}
@@ -123,32 +158,38 @@ export default function HomeScreen() {
       <View style={{ flexDirection: 'row', gap: S(10), marginBottom: S(24) }}>
         {[
           { icon: 'shirt-outline', number: items.length, label: 'Prendas', color: COLORS.primary },
-          { icon: 'layers-outline', number: categories.length, label: 'Categorias', color: COLORS.secondary },
-          { icon: 'sparkles-outline', number: 0, label: 'Outfits', color: COLORS.gold },
+          { icon: 'layers-outline', number: categories.length, label: 'Categorías', color: COLORS.secondary },
+          { icon: 'sparkles-outline', number: outfits.length, label: 'Outfits', color: COLORS.gold },
         ].map((stat, i) => (
           <View
             key={i}
             style={{
               flex: 1,
               backgroundColor: COLORS.white,
-              borderRadius: S(12),
-              paddingVertical: S(16),
+              borderRadius: S(14),
+              paddingVertical: S(18),
               paddingHorizontal: S(8),
               alignItems: 'center',
               shadowColor: '#000',
-              shadowOffset: { width: 0, height: S(2) },
-              shadowOpacity: 0.05,
-              shadowRadius: S(4),
-              elevation: 2,
+              shadowOffset: { width: 0, height: S(3) },
+              shadowOpacity: 0.07,
+              shadowRadius: S(8),
+              elevation: 3,
             }}
           >
-            <Ionicons name={stat.icon} size={FS(24)} color={stat.color} />
+            <View style={{
+              width: S(38), height: S(38), borderRadius: S(19),
+              backgroundColor: `${stat.color}15`,
+              justifyContent: 'center', alignItems: 'center',
+              marginBottom: S(8),
+            }}>
+              <Ionicons name={stat.icon} size={FS(20)} color={stat.color} />
+            </View>
             <Text
               style={{
-                fontSize: FS(20),
+                fontSize: FS(22),
                 fontWeight: '700',
                 color: '#1A1A1A',
-                marginTop: S(6),
               }}
             >
               {stat.number}
@@ -159,7 +200,7 @@ export default function HomeScreen() {
                 color: COLORS.textLight,
                 marginTop: S(2),
                 textTransform: 'uppercase',
-                letterSpacing: 0.5,
+                letterSpacing: 0.8,
                 textAlign: 'center',
               }}
             >
@@ -304,66 +345,101 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      {/* Ultimas prendas */}
+      {/* Placeholders vacíos — siluetas elegantes */}
+      {items.length === 0 && (
+        <View style={{ marginBottom: S(24) }}>
+          <Text style={{ fontSize: FS(17), fontWeight: '600', color: '#1A1A1A', marginBottom: S(12) }}>
+            Tus prendas
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: S(10) }}
+          >
+            {[1, 2, 3, 4].map((_, i) => (
+              <View
+                key={i}
+                style={{
+                  width: S(100),
+                  backgroundColor: COLORS.white,
+                  borderRadius: S(12),
+                  paddingVertical: S(20),
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: COLORS.border,
+                  borderStyle: 'dashed',
+                }}
+              >
+                <Ionicons name="shirt-outline" size={S(32)} color={COLORS.border} />
+                <Text style={{ fontSize: FS(10), color: COLORS.border, marginTop: S(8), textAlign: 'center' }}>
+                  {['Remera', 'Pantalón', 'Zapatos', 'Cartera'][i]}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Últimas prendas — galería horizontal */}
       {items.length > 0 && (
         <>
           <Text style={{ fontSize: FS(17), fontWeight: '600', color: '#1A1A1A', marginBottom: S(12) }}>
-            Ultimas agregadas
+            Últimas agregadas
           </Text>
-          {items.slice(0, 6).map((item) => (
-            <View
-              key={item.id}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: S(14),
-                backgroundColor: COLORS.white,
-                borderRadius: S(12),
-                padding: S(14),
-                marginBottom: S(8),
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: S(1) },
-                shadowOpacity: 0.04,
-                shadowRadius: S(3),
-                elevation: 1,
-              }}
-            >
-              <View
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: S(24) }}
+            contentContainerStyle={{ gap: S(10) }}
+          >
+            {items.slice(0, 8).map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.85}
                 style={{
-                  width: S(36),
-                  height: S(36),
-                  borderRadius: S(8),
-                  backgroundColor: item.color || '#E8E0D6',
-                  borderWidth: 1,
-                  borderColor: '#E8E0D6',
-                  justifyContent: 'center',
-                  alignItems: 'center',
+                  width: S(100),
+                  backgroundColor: COLORS.white,
+                  borderRadius: S(12),
+                  overflow: 'hidden',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: S(2) },
+                  shadowOpacity: 0.06,
+                  shadowRadius: S(6),
+                  elevation: 2,
                 }}
               >
-                {item.imageUrl ? null : (
-                  <Ionicons name="shirt-outline" size={S(18)} color="#FFFFFF" style={{ opacity: 0.5 }} />
-                )}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: FS(14), fontWeight: '600', color: '#1A1A1A' }}>
-                  {item.category}
-                </Text>
-                {item.season && item.season !== 'Todas' && (
-                  <Text
-                    style={{
-                      fontSize: FS(11),
-                      color: COLORS.textLight,
-                      marginTop: S(2),
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                    }}
-                  >
-                    {item.season}
+                <View style={{
+                  width: '100%',
+                  height: S(100),
+                  backgroundColor: item.color || '#F5F0EB',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}>
+                  {(item.imageUrl || item.image_url) ? (
+                    <Image
+                      source={{ uri: item.imageUrl || item.image_url }}
+                      style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+                    />
+                  ) : (
+                    <Ionicons name="shirt-outline" size={S(28)} color="#FFFFFF" style={{ opacity: 0.4 }} />
+                  )}
+                </View>
+                <View style={{ paddingHorizontal: S(8), paddingVertical: S(6) }}>
+                  <Text style={{ fontSize: FS(11), fontWeight: '600', color: '#1A1A1A' }} numberOfLines={1}>
+                    {item.category}
                   </Text>
-                )}
-              </View>
-            </View>
-          ))}
+                  {item.season && item.season !== 'Todas' && (
+                    <Text style={{
+                      fontSize: FS(9), color: COLORS.textLight, marginTop: S(2),
+                      textTransform: 'uppercase', letterSpacing: 0.5,
+                    }} numberOfLines={1}>
+                      {item.season}
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </>
       )}
     </ScreenWrapper>
@@ -397,9 +473,10 @@ function OutfitItemRow({ item, icon, label, S, FS }) {
         }}
       >
         {(item.imageUrl || item.image_url) ? (
-          <View style={{ width: '100%', height: '100%', backgroundColor: item.color || '#E8E0D6' }}>
-            {/* Image would go here if we had it */}
-          </View>
+          <Image
+            source={{ uri: item.imageUrl || item.image_url }}
+            style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+          />
         ) : (
           <Ionicons name={icon} size={S(20)} color="#FFFFFF" style={{ opacity: 0.6 }} />
         )}

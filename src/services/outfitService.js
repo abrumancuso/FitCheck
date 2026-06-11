@@ -10,13 +10,19 @@ const TABLE = 'outfits';
 /**
  * Crea un outfit nuevo y devuelve el registro creado.
  * @param {string} userId
- * @param {Object} data — { name, itemIds }
+ * @param {Object} data — { name, itemIds, itemSettings }
  * @returns {Promise<Object>} { id, ...data }
  */
-export const addOutfit = async (userId, { name, itemIds }) => {
+export const addOutfit = async (userId, { name, itemIds, itemSettings }) => {
   const { data: record, error } = await supabase
     .from(TABLE)
-    .insert({ name, item_ids: itemIds, item_count: itemIds.length, user_id: userId })
+    .insert({
+      name,
+      item_ids: itemIds,
+      item_count: itemIds.length,
+      item_settings: itemSettings || {},
+      user_id: userId,
+    })
     .select()
     .single();
   if (error) throw error;

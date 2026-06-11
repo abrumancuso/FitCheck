@@ -15,6 +15,7 @@ import { COLORS } from '../constants/theme';
 import LoginScreen from '../screens/LoginScreen';
 import RegisterScreen from '../screens/RegisterScreen';
 import AddClothingScreen from '../screens/AddClothingScreen';
+import OutfitDetailScreen from '../screens/OutfitDetailScreen';
 import TabNavigator from './TabNavigator';
 
 const Stack = createNativeStackNavigator();
@@ -37,6 +38,7 @@ export default function RootNavigator() {
           <>
             <Stack.Screen name="Main" component={TabNavigator} />
             <Stack.Screen name="AddClothing" component={AddClothingScreen} />
+            <Stack.Screen name="OutfitDetail" component={OutfitDetailScreen} />
           </>
         ) : (
           <>

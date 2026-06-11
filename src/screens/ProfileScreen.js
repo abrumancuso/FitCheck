@@ -1,11 +1,9 @@
 /**
  * ProfileScreen — Perfil responsive con ScreenWrapper
  * ====================================================
- * SafeArea + padding horizontal resuelto por el wrapper.
- * Sin margins manuales truchos (adiós paddingTop: VS(80)).
  */
 
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { COLORS } from '../constants/theme';
@@ -30,36 +28,51 @@ export default function ProfileScreen() {
 
   return (
     <ScreenWrapper>
-      <View style={{ flex: 1, alignItems: 'center', paddingTop: VS(32) }}>
-        {/* Avatar */}
-        <View style={{ width: S(72), height: S(72), borderRadius: S(36), backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginBottom: S(16) }}>
-          <Text style={{ fontSize: FS(28), fontWeight: '700', color: '#fff' }}>{initials}</Text>
-        </View>
-        <Text style={{ fontSize: FS(15), color: '#1A1A1A', fontWeight: '500', marginBottom: S(24) }}>{user?.email}</Text>
-
-        {/* Info card */}
-        <View style={{ width: '100%', backgroundColor: COLORS.white, borderRadius: S(12), padding: S(16), shadowColor: '#000', shadowOffset: { width: 0, height: S(2) }, shadowOpacity: 0.05, shadowRadius: S(4), elevation: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(8) }}>
-            <Ionicons name="calendar-outline" size={FS(16)} color={COLORS.textLight} />
-            <Text style={{ flex: 1, fontSize: FS(14), color: COLORS.textLight }}>Miembro desde</Text>
-            <Text style={{ fontSize: FS(14), fontWeight: '600', color: '#1A1A1A' }}>
-              {new Date(user?.created_at || Date.now()).toLocaleDateString('es-AR', { year: 'numeric', month: 'long' })}
+      <ScrollView contentContainerStyle={{ paddingBottom: VS(40) }}>
+        {/* Header */}
+        <View style={{ alignItems: 'center', paddingTop: VS(24) }}>
+          <View style={{
+            width: S(72), height: S(72), borderRadius: S(36),
+            backgroundColor: COLORS.primary,
+            justifyContent: 'center', alignItems: 'center',
+            marginBottom: S(12),
+          }}>
+            <Text style={{ fontSize: FS(28), fontWeight: '700', color: '#fff' }}>{initials}</Text>
+          </View>
+          <Text style={{ fontSize: FS(15), color: '#1A1A1A', fontWeight: '500', marginBottom: S(4) }}>
+            {user?.email}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(4), marginBottom: S(24) }}>
+            <Ionicons name="calendar-outline" size={FS(12)} color={COLORS.textLight} />
+            <Text style={{ fontSize: FS(12), color: COLORS.textLight }}>
+              Miembro desde {new Date(user?.created_at || Date.now()).toLocaleDateString('es-AR', { year: 'numeric', month: 'long' })}
             </Text>
           </View>
         </View>
 
-        {/* Cerrar sesión */}
+        {/* ─── Cerrar sesión ──────────────────────── */}
         <TouchableOpacity
-          style={{ flexDirection: 'row', alignItems: 'center', gap: S(8), marginTop: S(32), paddingVertical: S(16), paddingHorizontal: S(24) }}
+          style={{
+            flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            gap: S(6), paddingVertical: S(14), marginTop: S(12),
+            borderWidth: 1, borderColor: COLORS.border, borderRadius: S(10),
+          }}
           onPress={handleLogout}
         >
           <Ionicons name="log-out-outline" size={FS(16)} color={COLORS.error} />
-          <Text style={{ color: COLORS.error, fontSize: FS(15), fontWeight: '500' }}>Cerrar sesión</Text>
+          <Text style={{ color: COLORS.error, fontSize: FS(15), fontWeight: '500' }}>
+            Cerrar sesión
+          </Text>
         </TouchableOpacity>
 
         {/* Versión */}
-        <Text style={{ position: 'absolute', bottom: VS(40), fontSize: FS(12), color: COLORS.textLight }}>FitCheck v1.0</Text>
-      </View>
+        <Text style={{
+          textAlign: 'center', fontSize: FS(12),
+          color: COLORS.textLight, marginTop: VS(24),
+        }}>
+          FitCheck v1.0
+        </Text>
+      </ScrollView>
     </ScreenWrapper>
   );
 }

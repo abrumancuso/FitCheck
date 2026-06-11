@@ -8,22 +8,30 @@ import { useState, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Image,
   TextInput, Alert, ActivityIndicator, RefreshControl,
-  Share,
+  Share, ScrollView, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import ViewShot from 'react-native-view-shot';
+import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { getClothingItems } from '../services/clothingService';
 import { addOutfit, getOutfits, deleteOutfit } from '../services/outfitService';
 import { COLORS } from '../constants/theme';
 import { useAppScale } from '../utils/responsive';
 import ScreenWrapper from '../components/ScreenWrapper';
-import OutfitPreview, { getInitialPosition, SKIN_TONES } from '../components/OutfitPreview';
+import OutfitPreview, { getInitialPosition } from '../components/OutfitPreview';
 import ItemLayerControls from '../components/ItemLayerControls';
+import Skeleton from '../components/Skeleton';
+import { impact, notification } from '../utils/haptics';
 
-export default function OutfitsScreen() {
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+export default function OutfitsScreen({ navigation }) {
   const { scale, fontScale, verticalScale, width } = useAppScale();
   const { user } = useAuth();
   const S = (n) => scale(n);
@@ -36,13 +44,13 @@ export default function OutfitsScreen() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [itemSettings, setItemSettings] = useState({});
   const [selectedLayerId, setSelectedLayerId] = useState(null);
-  const [skinTone, setSkinTone] = useState(2); // default: Natural
   const outfitPreviewRef = useRef(null);
 
   const [outfitName, setOutfitName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [smartMatchLoading, setSmartMatchLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -86,7 +94,10 @@ export default function OutfitsScreen() {
   };
 
   const toggleItem = (id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const willBeAdded = !selectedIds.includes(id);
+    if (willBeAdded) impact.light();
+    else impact.light();
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
@@ -100,11 +111,10 @@ export default function OutfitsScreen() {
           scale: initial.scale,
           offsetX: initial.offsetX || 0,
           offsetY: initial.offsetY || 0,
-          locked: false,
+          locked: false, // aparece desbloqueado para poder arrastrarlo
         },
       }));
-      // Auto-seleccionar la prenda recién agregada para ajustarla
-      setSelectedLayerId(id);
+      setSelectedLayerId(id); // auto-seleccionamos para mostrar controles
     } else {
       // Si se saca la prenda y estaba seleccionada, limpiar
       if (selectedLayerId === id) setSelectedLayerId(null);
@@ -114,8 +124,13 @@ export default function OutfitsScreen() {
   const handleSave = async () => {
     if (selectedIds.length === 0 || !outfitName.trim()) return;
     try {
-      await addOutfit(user.id, { name: outfitName.trim(), itemIds: selectedIds });
+      await addOutfit(user.id, {
+        name: outfitName.trim(),
+        itemIds: selectedIds,
+        itemSettings,
+      });
       Alert.alert('Listo', 'Outfit guardado');
+      notification.success();
       setMode('list');
       setSelectedIds([]);
       setItemSettings({});
@@ -143,6 +158,68 @@ export default function OutfitsScreen() {
     setOutfitName('');
   };
 
+  // ─── Smart Match ─────────────────────────────────────────────
+
+  const TOPS = ['Remera', 'Camisa', 'Blusa', 'Buzo', 'Sweater', 'Campera', 'Abrigo', 'Blazer'];
+  const BOTTOMS = ['Pantalón', 'Short', 'Falda', 'Pollera'];
+  const SHOES = ['Zapatos'];
+  const ALL_OUTFIT_CATS = [...TOPS, ...BOTTOMS, ...SHOES];
+
+  const handleSmartMatch = async () => {
+    const selectedItemsList = wardrobeItems.filter((i) => selectedIds.includes(i.id));
+    const available = wardrobeItems.filter((i) => !selectedIds.includes(i.id));
+
+    if (available.length === 0) {
+      Alert.alert('Sin sugerencias', 'No hay más prendas disponibles para sugerir.');
+      return;
+    }
+
+    let targetCategories = [];
+
+    if (selectedIds.length === 0) {
+      // Sin nada en el lienzo — sugerir cualquier prenda principal
+      targetCategories = ALL_OUTFIT_CATS;
+    } else {
+      const selectedCats = selectedItemsList.map((i) => i.category);
+      const hasTop = selectedCats.some((c) => TOPS.includes(c));
+      const hasBottom = selectedCats.some((c) => BOTTOMS.includes(c));
+      const hasShoes = selectedCats.some((c) => SHOES.includes(c));
+
+      if (!hasTop) targetCategories.push(...TOPS);
+      if (!hasBottom) targetCategories.push(...BOTTOMS);
+      if (!hasShoes) targetCategories.push(...SHOES);
+
+      // Si ya tenemos outfit completo, sugerir accesorio
+      if (targetCategories.length === 0) {
+        targetCategories = ['Cartera', 'Accesorio'];
+      }
+    }
+
+    // Filtrar candidatos por categoría
+    let candidates = available.filter((i) => targetCategories.includes(i.category));
+
+    if (candidates.length === 0) {
+      Alert.alert('Sin coincidencias', '¡Probá cargando más prendas de esta temporada!');
+      return;
+    }
+
+    // Preferir items de la misma temporada que lo ya seleccionado
+    const existingSeasons = selectedItemsList.map((i) => i.season).filter(Boolean);
+    if (existingSeasons.length > 0) {
+      const seasonMatch = candidates.filter((i) => existingSeasons.includes(i.season));
+      if (seasonMatch.length > 0) candidates = seasonMatch;
+    }
+
+    setSmartMatchLoading(true);
+    // Pequeña pausa para sensación de "magia"
+    await new Promise((r) => setTimeout(r, 500));
+
+    const pick = candidates[Math.floor(Math.random() * Math.min(candidates.length, 3))];
+    toggleItem(pick.id);
+    notification.success();
+    setSmartMatchLoading(false);
+  };
+
   const handleShare = async () => {
     if (!outfitPreviewRef.current || selectedItems.length === 0) return;
     try {
@@ -164,9 +241,12 @@ export default function OutfitsScreen() {
   if (mode === 'list') {
     if (loading && outfits.length === 0) {
       return (
-        <ScreenWrapper>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+        <ScreenWrapper horizontalPadding={false}>
+          <View style={{ flex: 1, paddingHorizontal: S(24), paddingTop: VS(12) }}>
+            <Skeleton width={180} height={28} borderRadius={6} style={{ marginBottom: S(24) }} />
+            {[1, 2, 3, 4].map((_, i) => (
+              <Skeleton.Card key={i} style={{ marginBottom: S(10) }} />
+            ))}
           </View>
         </ScreenWrapper>
       );
@@ -194,6 +274,11 @@ export default function OutfitsScreen() {
       const firstItemId = itemIds[0];
       const firstItem = wardrobeItems.find(w => w.id === firstItemId);
 
+      // Items de este outfit
+      const outfitItems = itemIds
+        .map((id) => wardrobeItems.find((w) => w.id === id))
+        .filter(Boolean);
+
       return (
         <TouchableOpacity
           style={{
@@ -209,6 +294,10 @@ export default function OutfitsScreen() {
             flexDirection: 'row',
             alignItems: 'center',
           }}
+          onPress={() => navigation.navigate('OutfitDetail', {
+            outfit: item,
+            items: outfitItems,
+          })}
           onLongPress={() => handleDeleteOutfit(item)}
           activeOpacity={0.85}
         >
@@ -292,7 +381,7 @@ export default function OutfitsScreen() {
   return (
     <ScreenWrapper horizontalPadding={false}>
       <View style={{ flex: 1 }}>
-        {/* Header */}
+        {/* Header (fijo) */}
         <View style={{
           paddingHorizontal: H_PADDING,
           paddingTop: VS(12),
@@ -307,7 +396,7 @@ export default function OutfitsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Outfit Preview + controles */}
+        {/* Canvas + controles (fijo — NO scrollea) */}
         <View style={{
           paddingHorizontal: H_PADDING,
           paddingVertical: S(8),
@@ -336,7 +425,6 @@ export default function OutfitsScreen() {
                 }
               }}
               canvasWidth={width * 0.68}
-              skinTone={skinTone}
             />
           </ViewShot>
 
@@ -352,6 +440,7 @@ export default function OutfitsScreen() {
                 }
               }}
               onRemove={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                 setSelectedIds((prev) => prev.filter((id) => id !== selectedLayerId));
                 setSelectedLayerId(null);
               }}
@@ -398,6 +487,7 @@ export default function OutfitsScreen() {
                   <TouchableOpacity
                     hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     onPress={() => {
+                      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                       setSelectedIds((prev) => prev.filter((id) => id !== item.id));
                       if (selectedLayerId === item.id) setSelectedLayerId(null);
                     }}
@@ -412,33 +502,57 @@ export default function OutfitsScreen() {
               ))}
             </View>
           )}
-
-          {/* ─── Selector de tono de piel ─────────────────── */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(6), marginTop: S(10), marginBottom: S(4) }}>
-            <Text style={{ fontSize: FS(11), color: COLORS.textLight }}>Piel:</Text>
-            {SKIN_TONES.map((tone, idx) => (
-              <TouchableOpacity
-                key={idx}
-                style={{
-                  width: S(22), height: S(22),
-                  borderRadius: S(11),
-                  backgroundColor: tone.light,
-                  borderWidth: skinTone === idx ? 2.5 : 1,
-                  borderColor: skinTone === idx ? COLORS.primary : COLORS.border,
-                }}
-                onPress={() => setSkinTone(idx)}
-                activeOpacity={0.7}
-              />
-            ))}
-          </View>
         </View>
 
-        {/* Available items — tap to select */}
-        <FlatList
+        {/* Available items — scrollean */}
+        <ScrollView
           style={{ flex: 1 }}
-          data={wardrobeItems.filter(item => !selectedIds.includes(item.id))}
-          renderItem={({ item }) => (
+          contentContainerStyle={{ paddingBottom: VS(220), paddingHorizontal: H_PADDING, paddingTop: S(12) }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Smart Match — sugerencia inteligente */}
+          {wardrobeItems.filter(i => !selectedIds.includes(i.id)).length > 0 && (
+            <View style={{ marginBottom: S(12) }}>
+              <TouchableOpacity
+                onPress={handleSmartMatch}
+                disabled={smartMatchLoading}
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: S(8),
+                  backgroundColor: '#F5F0FF',
+                  borderRadius: S(12),
+                  paddingVertical: S(12),
+                  borderWidth: 1,
+                  borderColor: '#D8CFF0',
+                }}
+              >
+                {smartMatchLoading ? (
+                  <ActivityIndicator size="small" color="#6B4FA0" />
+                ) : (
+                  <Ionicons name="wand-outline" size={FS(18)} color="#6B4FA0" />
+                )}
+                <Text style={{ fontSize: FS(14), fontWeight: '600', color: '#6B4FA0' }}>
+                  {smartMatchLoading ? 'Buscando...' : 'Smart Match'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {wardrobeItems.filter(item => !selectedIds.includes(item.id)).length === 0 ? (
+            <View style={{ paddingVertical: VS(40), alignItems: 'center' }}>
+              <Ionicons name="checkmark-done-outline" size={S(40)} color={COLORS.success} />
+              <Text style={{ fontSize: FS(14), color: COLORS.textLight, marginTop: S(12), textAlign: 'center' }}>
+                Todas las prendas seleccionadas
+              </Text>
+            </View>
+          ) : (
+            wardrobeItems.filter(item => !selectedIds.includes(item.id)).map((item) => (
             <TouchableOpacity
+              key={item.id}
               style={{
                 flexDirection: 'row', alignItems: 'center',
                 backgroundColor: COLORS.white,
@@ -460,22 +574,11 @@ export default function OutfitsScreen() {
               </View>
               <Ionicons name="add-circle-outline" size={S(22)} color={COLORS.primary} />
             </TouchableOpacity>
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: H_PADDING, paddingTop: S(12), paddingBottom: VS(200) }}
-          ListEmptyComponent={
-            <View style={{ paddingTop: VS(40), alignItems: 'center' }}>
-              <Text style={{ fontSize: FS(14), color: COLORS.textLight }}>Todas las prendas seleccionadas</Text>
-            </View>
-          }
-        />
+          )))}
+        </ScrollView>
 
-        {/* Bottom section — name input + save */}
+        {/* Bottom section — name input + save (fijo al fondo) */}
         <View style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
           paddingHorizontal: H_PADDING,
           paddingTop: S(12),
           paddingBottom: VS(24),
