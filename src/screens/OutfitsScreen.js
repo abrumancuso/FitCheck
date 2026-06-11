@@ -8,7 +8,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Image,
   TextInput, Alert, ActivityIndicator, RefreshControl,
-  Share, ScrollView, LayoutAnimation, Platform, UIManager,
+  ScrollView, LayoutAnimation, Platform, UIManager,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -270,18 +270,6 @@ export default function OutfitsScreen({ navigation, route }) {
     toggleItem(pick.id);
     notification.success();
     setSmartMatchLoading(false);
-  };
-
-  const handleShare = async () => {
-    if (!outfitPreviewRef.current || selectedItems.length === 0) return;
-    try {
-      const uri = await outfitPreviewRef.current.capture();
-      await Share.share({ url: uri, message: 'Mirá el outfit que armé en FitCheck 👗' });
-    } catch (err) {
-      if (err.message !== 'User did not share') {
-        Alert.alert('Error', 'No se pudo compartir');
-      }
-    }
   };
 
   const H_PADDING = S(24);
@@ -561,7 +549,7 @@ export default function OutfitsScreen({ navigation, route }) {
         {/* Available items — scrollean */}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: VS(220), paddingHorizontal: H_PADDING, paddingTop: S(12) }}
+          contentContainerStyle={{ paddingBottom: selectedItems.length > 0 ? VS(200) : VS(100), paddingHorizontal: H_PADDING, paddingTop: S(12) }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -610,95 +598,101 @@ export default function OutfitsScreen({ navigation, route }) {
               style={{
                 flexDirection: 'row', alignItems: 'center',
                 backgroundColor: COLORS.white,
-                borderRadius: S(10), padding: S(12), marginBottom: S(6),
-                borderWidth: 1, borderColor: COLORS.border,
+                borderRadius: S(12), padding: S(14), marginBottom: S(8),
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: S(1) },
+                shadowOpacity: 0.04,
+                shadowRadius: S(4),
+                elevation: 1,
               }}
               onPress={() => toggleItem(item.id)}
               activeOpacity={0.7}
             >
-              <View style={{ width: S(44), height: S(44), borderRadius: S(8), overflow: 'hidden', marginRight: S(12), backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center' }}>
+              <View style={{
+                width: S(48), height: S(48), borderRadius: S(10),
+                overflow: 'hidden', marginRight: S(14),
+                backgroundColor: item.color || '#F5F0EB',
+                justifyContent: 'center', alignItems: 'center',
+              }}>
                 {(item.imageUrl || item.image_url) ? (
                   <Image source={{ uri: item.imageUrl || item.image_url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
                 ) : (
-                  <Ionicons name="shirt-outline" size={S(20)} color={COLORS.white} />
+                  <Ionicons name="shirt-outline" size={S(22)} color="#FFFFFF" style={{ opacity: 0.5 }} />
                 )}
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: FS(14), fontWeight: '500', color: '#1A1A1A' }}>{item.category}</Text>
+                <Text style={{ fontSize: FS(14), fontWeight: '600', color: '#1A1A1A' }}>{item.category}</Text>
+                {item.season && item.season !== 'Todas' && (
+                  <Text style={{
+                    fontSize: FS(11), color: COLORS.textLight, marginTop: S(2),
+                  }}>
+                    {item.season}
+                  </Text>
+                )}
               </View>
-              <Ionicons name="add-circle-outline" size={S(22)} color={COLORS.primary} />
+              <View style={{
+                width: S(32), height: S(32), borderRadius: S(16),
+                backgroundColor: COLORS.primary + '12',
+                justifyContent: 'center', alignItems: 'center',
+              }}>
+                <Ionicons name="add" size={S(18)} color={COLORS.primary} />
+              </View>
             </TouchableOpacity>
           )))}
         </ScrollView>
 
-        {/* Bottom section — name input + save (fijo al fondo) */}
-        <View style={{
-          paddingHorizontal: H_PADDING,
-          paddingTop: S(12),
-          paddingBottom: VS(24),
-          backgroundColor: COLORS.background,
-          borderTopWidth: 1,
-          borderTopColor: COLORS.border,
-        }}>
-          <TextInput
-            style={{
-              backgroundColor: COLORS.white,
-              borderRadius: S(10),
-              paddingHorizontal: S(16),
-              paddingVertical: S(12),
-              fontSize: FS(15),
-              color: '#1A1A1A',
-              borderWidth: 1,
-              borderColor: COLORS.border,
-              marginBottom: S(10),
-            }}
-            placeholder="Nombre del outfit"
-            placeholderTextColor={COLORS.textLight}
-            value={outfitName}
-            onChangeText={setOutfitName}
-          />
-          <TouchableOpacity
-            style={{
-              backgroundColor: selectedIds.length > 0 && outfitName.trim()
-                ? COLORS.primary
-                : '#CCB6B9',
-              borderRadius: S(10),
-              paddingVertical: S(14),
-              alignItems: 'center',
-              marginBottom: S(8),
-            }}
-            onPress={handleSave}
-            disabled={selectedIds.length === 0 || !outfitName.trim()}
-            activeOpacity={0.85}
-          >
-            <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.white }}>
-              {editingOutfit ? 'Guardar Cambios' : 'Guardar Outfit'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Compartir */}
-          {selectedItems.length > 0 && (
+        {/* Bottom section — solo cuando hay prendas seleccionadas */}
+        {selectedItems.length > 0 && (
+          <View style={{
+            paddingHorizontal: H_PADDING,
+            paddingTop: S(14),
+            paddingBottom: VS(28),
+            backgroundColor: COLORS.white,
+            borderTopWidth: 1,
+            borderTopColor: COLORS.border,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -S(3) },
+            shadowOpacity: 0.06,
+            shadowRadius: S(8),
+            elevation: 6,
+          }}>
+            <TextInput
+              style={{
+                backgroundColor: '#F8F6F3',
+                borderRadius: S(12),
+                paddingHorizontal: S(18),
+                paddingVertical: S(14),
+                fontSize: FS(15),
+                color: '#1A1A1A',
+                marginBottom: S(10),
+              }}
+              placeholder="Ponéle nombre a tu outfit"
+              placeholderTextColor={COLORS.textLight}
+              value={outfitName}
+              onChangeText={setOutfitName}
+            />
             <TouchableOpacity
               style={{
-                borderRadius: S(10),
-                paddingVertical: S(10),
+                backgroundColor: outfitName.trim()
+                  ? COLORS.primary
+                  : '#CCB6B9',
+                borderRadius: S(12),
+                paddingVertical: S(15),
                 alignItems: 'center',
-                borderWidth: 1,
-                borderColor: COLORS.border,
-                backgroundColor: COLORS.white,
               }}
-              onPress={handleShare}
-              activeOpacity={0.7}
+              onPress={handleSave}
+              disabled={!outfitName.trim()}
+              activeOpacity={0.85}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(6) }}>
-                <Ionicons name="share-outline" size={FS(16)} color={COLORS.primary} />
-                <Text style={{ fontSize: FS(14), fontWeight: '500', color: COLORS.text }}>
-                  Compartir
-                </Text>
-              </View>
+              <Text style={{
+                fontSize: FS(16), fontWeight: '700', color: COLORS.white,
+                letterSpacing: 0.3,
+              }}>
+                {editingOutfit ? 'Guardar Cambios' : 'Guardar Outfit'}
+              </Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
       </View>
     </ScreenWrapper>
   );
