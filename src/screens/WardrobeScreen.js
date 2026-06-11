@@ -173,6 +173,25 @@ export default function WardrobeScreen({ navigation }) {
             </Text>
           </View>
         )}
+
+        {/* Botón eliminar visible */}
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            top: S(6),
+            left: S(6),
+            width: S(28),
+            height: S(28),
+            borderRadius: S(14),
+            backgroundColor: 'rgba(0,0,0,0.35)',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+          onPress={() => handleDelete(item)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="trash-outline" size={S(14)} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       {/* Info */}
