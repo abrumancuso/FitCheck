@@ -92,6 +92,15 @@ export default function OutfitDetailScreen({ route, navigation }) {
     }
   };
 
+  // ─── Editar ─────────────────────────────────────────────────
+
+  const handleEdit = () => {
+    navigation.navigate('Main', {
+      screen: 'Outfits',
+      params: { editOutfit: outfit },
+    });
+  };
+
   // ─── Render ───────────────────────────────────────────────
 
   return (
@@ -162,6 +171,29 @@ export default function OutfitDetailScreen({ route, navigation }) {
               fontSize: FS(16), fontWeight: '600', color: COLORS.white,
             }}>
               Compartir
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              backgroundColor: COLORS.white,
+              borderRadius: S(12),
+              paddingVertical: S(14),
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              gap: S(8),
+              borderWidth: 1,
+              borderColor: COLORS.border,
+            }}
+            onPress={handleEdit}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="create-outline" size={FS(18)} color={COLORS.text} />
+            <Text style={{
+              fontSize: FS(16), fontWeight: '600', color: COLORS.text,
+            }}>
+              Editar
             </Text>
           </TouchableOpacity>
 

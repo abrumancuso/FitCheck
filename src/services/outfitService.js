@@ -45,6 +45,27 @@ export const getOutfits = async (userId) => {
 };
 
 /**
+ * Actualiza un outfit existente.
+ * @param {string} outfitId
+ * @param {Object} data — { name?, itemIds?, itemSettings? }
+ */
+export const updateOutfit = async (outfitId, data) => {
+  const updates = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.itemIds !== undefined) {
+    updates.item_ids = data.itemIds;
+    updates.item_count = data.itemIds.length;
+  }
+  if (data.itemSettings !== undefined) updates.item_settings = data.itemSettings;
+
+  const { error } = await supabase
+    .from(TABLE)
+    .update(updates)
+    .eq('id', outfitId);
+  if (error) throw error;
+};
+
+/**
  * Elimina un outfit por ID.
  * @param {string} userId
  * @param {string} outfitId

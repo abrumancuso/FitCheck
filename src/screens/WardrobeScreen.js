@@ -27,6 +27,7 @@ import {
 import { COLORS } from '../constants/theme';
 import { useAppScale } from '../utils/responsive';
 import ScreenWrapper from '../components/ScreenWrapper';
+import { impact } from '../utils/haptics';
 
 // ── Iconos por categoría ──────────────────────────────────────
 
@@ -84,6 +85,7 @@ export default function WardrobeScreen({ navigation }) {
   };
 
   const handleDelete = (item) => {
+    impact.light();
     Alert.alert('Eliminar prenda', `Eliminar ${item.category}?`, [
       { text: 'Cancelar', style: 'cancel' },
       {
@@ -358,7 +360,10 @@ export default function WardrobeScreen({ navigation }) {
                     key={cat}
                     label={cat}
                     selected={selectedCategory === cat}
-                    onPress={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                    onPress={() => {
+                      impact.light();
+                      setSelectedCategory(selectedCategory === cat ? null : cat);
+                    }}
                   />
                 ))}
               </ScrollView>
@@ -376,7 +381,10 @@ export default function WardrobeScreen({ navigation }) {
                       borderWidth: selectedColor === c.value ? 3 : 1,
                       borderColor: selectedColor === c.value ? COLORS.primary : '#E0D8CE',
                     }}
-                    onPress={() => setSelectedColor(selectedColor === c.value ? null : c.value)}
+                    onPress={() => {
+                      impact.light();
+                      setSelectedColor(selectedColor === c.value ? null : c.value);
+                    }}
                   />
                 ))}
               </ScrollView>
@@ -387,7 +395,10 @@ export default function WardrobeScreen({ navigation }) {
                     key={s}
                     label={s}
                     selected={selectedSeason === s}
-                    onPress={() => setSelectedSeason(selectedSeason === s ? null : s)}
+                    onPress={() => {
+                      impact.light();
+                      setSelectedSeason(selectedSeason === s ? null : s);
+                    }}
                   />
                 ))}
               </ScrollView>

@@ -4,7 +4,7 @@
  * Two-mode screen: list saved outfits or build a new one.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Image,
   TextInput, Alert, ActivityIndicator, RefreshControl,
@@ -17,7 +17,7 @@ import ViewShot from 'react-native-view-shot';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { getClothingItems } from '../services/clothingService';
-import { addOutfit, getOutfits, deleteOutfit } from '../services/outfitService';
+import { addOutfit, getOutfits, deleteOutfit, updateOutfit } from '../services/outfitService';
 import { COLORS } from '../constants/theme';
 import { useAppScale } from '../utils/responsive';
 import ScreenWrapper from '../components/ScreenWrapper';
@@ -31,7 +31,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export default function OutfitsScreen({ navigation }) {
+export default function OutfitsScreen({ navigation, route }) {
   const { scale, fontScale, verticalScale, width } = useAppScale();
   const { user } = useAuth();
   const S = (n) => scale(n);
@@ -51,6 +51,7 @@ export default function OutfitsScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [smartMatchLoading, setSmartMatchLoading] = useState(false);
+  const [editingOutfit, setEditingOutfit] = useState(null);
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -69,7 +70,45 @@ export default function OutfitsScreen({ navigation }) {
     }
   }, [user?.id]);
 
-  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+  useFocusEffect(useCallback(() => {
+    if (!route.params?.editOutfit) {
+      loadData();
+    }
+  }, [loadData, route.params?.editOutfit]));
+
+  // Manejar edición desde OutfitDetail
+  useEffect(() => {
+    const edit = route.params?.editOutfit;
+    if (!edit) return;
+
+    // Poblar el builder con los datos del outfit existente
+    setEditingOutfit(edit);
+    setOutfitName(edit.name);
+    setSelectedIds(edit.item_ids || []);
+
+    // Reconstruir posiciones guardadas
+    const saved = edit.item_settings || {};
+    const canvasW = width * 0.68;
+    const settings = {};
+    (edit.item_ids || []).forEach((id) => {
+      const item = wardrobeItems.find((w) => w.id === id);
+      if (item) {
+        const s = saved[id];
+        const initial = getInitialPosition(item.category, canvasW);
+        settings[id] = {
+          scale: s?.scale ?? initial.scale,
+          offsetX: s?.offsetX ?? (initial.offsetX || 0),
+          offsetY: s?.offsetY ?? (initial.offsetY || 0),
+          locked: false,
+        };
+      }
+    });
+    setItemSettings(settings);
+    setMode('builder');
+
+    // Limpiar el param para que no re-ingrese al volver
+    navigation.setParams({ editOutfit: undefined });
+  }, [route.params?.editOutfit]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -124,21 +163,33 @@ export default function OutfitsScreen({ navigation }) {
   const handleSave = async () => {
     if (selectedIds.length === 0 || !outfitName.trim()) return;
     try {
-      await addOutfit(user.id, {
-        name: outfitName.trim(),
-        itemIds: selectedIds,
-        itemSettings,
-      });
-      Alert.alert('Listo', 'Outfit guardado');
+      if (editingOutfit) {
+        await updateOutfit(editingOutfit.id, {
+          name: outfitName.trim(),
+          itemIds: selectedIds,
+          itemSettings,
+        });
+        Alert.alert('Listo', 'Outfit actualizado');
+      } else {
+        await addOutfit(user.id, {
+          name: outfitName.trim(),
+          itemIds: selectedIds,
+          itemSettings,
+        });
+        Alert.alert('Listo', 'Outfit guardado');
+      }
       notification.success();
       setMode('list');
+      setEditingOutfit(null);
       setSelectedIds([]);
       setItemSettings({});
       setSelectedLayerId(null);
       setOutfitName('');
       loadData();
     } catch (_) {
-      Alert.alert('Error', 'No se pudo guardar el outfit');
+      Alert.alert('Error', editingOutfit
+        ? 'No se pudo actualizar el outfit'
+        : 'No se pudo guardar el outfit');
     }
   };
 
@@ -152,6 +203,7 @@ export default function OutfitsScreen({ navigation }) {
 
   const cancelBuilder = () => {
     setMode('list');
+    setEditingOutfit(null);
     setSelectedIds([]);
     setItemSettings({});
     setSelectedLayerId(null);
@@ -390,7 +442,9 @@ export default function OutfitsScreen({ navigation }) {
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
-          <Text style={{ fontSize: FS(20), fontWeight: '700', color: COLORS.primary }}>Nuevo Outfit</Text>
+          <Text style={{ fontSize: FS(20), fontWeight: '700', color: COLORS.primary }}>
+            {editingOutfit ? 'Editar Outfit' : 'Nuevo Outfit'}
+          </Text>
           <TouchableOpacity onPress={cancelBuilder}>
             <Text style={{ fontSize: FS(15), color: COLORS.textLight, fontWeight: '500' }}>Cancelar</Text>
           </TouchableOpacity>
@@ -618,7 +672,7 @@ export default function OutfitsScreen({ navigation }) {
             activeOpacity={0.85}
           >
             <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.white }}>
-              Guardar Outfit
+              {editingOutfit ? 'Guardar Cambios' : 'Guardar Outfit'}
             </Text>
           </TouchableOpacity>
 
