@@ -53,6 +53,11 @@ export default function OutfitsScreen({ navigation, route }) {
   const [smartMatchLoading, setSmartMatchLoading] = useState(false);
   const [editingOutfit, setEditingOutfit] = useState(null);
 
+  // Ref para preservar posiciones del edit a pesar de re-renders
+  const editPositionsRef = useRef(null);
+  // Ref para preservar los items del edit (pasados desde OutfitDetail)
+  const editItemsRef = useRef(null);
+
   const loadData = useCallback(async () => {
     if (!user?.id) return;
     setError(null);
@@ -71,44 +76,80 @@ export default function OutfitsScreen({ navigation, route }) {
   }, [user?.id]);
 
   useFocusEffect(useCallback(() => {
-    if (!route.params?.editOutfit) {
-      loadData();
+    // No recargar datos si estamos en modo edición
+    if (editingOutfit || route.params?.editOutfit) {
+      return;
     }
-  }, [loadData, route.params?.editOutfit]));
+    loadData();
+  }, [loadData, editingOutfit, route.params?.editOutfit]));
 
   // Manejar edición desde OutfitDetail
   useEffect(() => {
     const edit = route.params?.editOutfit;
     if (!edit) return;
 
+    // Si wardrobeItems está vacío (ej: re-mount del tab), cargarlos
+    if (wardrobeItems.length === 0 && user?.id) {
+      loadData();
+    }
+
+    // Guardar items del edit en ref (vienen directo desde OutfitDetail)
+    if (route.params?.editItems) {
+      editItemsRef.current = route.params.editItems;
+    }
+
     // Poblar el builder con los datos del outfit existente
     setEditingOutfit(edit);
     setOutfitName(edit.name);
     setSelectedIds(edit.item_ids || []);
 
-    // Reconstruir posiciones guardadas
+    // Reconstruir posiciones guardadas y guardarlas en ref
     const saved = edit.item_settings || {};
     const canvasW = width * 0.68;
     const settings = {};
+    const editItems = editItemsRef.current || [];
+
     (edit.item_ids || []).forEach((id) => {
-      const item = wardrobeItems.find((w) => w.id === id);
+      // Buscar el item primero en editItems (pasados desde detalle),
+      // después en wardrobeItems
+      const item = editItems.find((w) => w.id === id)
+                || wardrobeItems.find((w) => w.id === id);
       if (item) {
         const s = saved[id];
         const initial = getInitialPosition(item.category, canvasW);
-        settings[id] = {
+        const pos = {
           scale: s?.scale ?? initial.scale,
           offsetX: s?.offsetX ?? (initial.offsetX || 0),
           offsetY: s?.offsetY ?? (initial.offsetY || 0),
           locked: false,
         };
+        settings[id] = pos;
       }
     });
+    editPositionsRef.current = settings;
     setItemSettings(settings);
     setMode('builder');
 
     // Limpiar el param para que no re-ingrese al volver
-    navigation.setParams({ editOutfit: undefined });
+    navigation.setParams({ editOutfit: undefined, editItems: undefined });
   }, [route.params?.editOutfit]);
+
+  // Safety net: si estamos editando y faltan posiciones, restaurar del ref
+  useEffect(() => {
+    if (mode !== 'builder' || !editingOutfit || !editPositionsRef.current) return;
+    setItemSettings((prev) => {
+      // Solo restaurar IDs que falten en prev
+      const restored = { ...prev };
+      let changed = false;
+      editingOutfit.item_ids?.forEach((id) => {
+        if (!prev[id] && editPositionsRef.current?.[id]) {
+          restored[id] = editPositionsRef.current[id];
+          changed = true;
+        }
+      });
+      return changed ? restored : prev;
+    });
+  }, [mode, editingOutfit, wardrobeItems]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -416,7 +457,12 @@ export default function OutfitsScreen({ navigation, route }) {
   //  MODE: BUILDER — create a new outfit
   // ──────────────────────────────────────────────
 
-  const selectedItems = wardrobeItems.filter((item) => selectedIds.includes(item.id));
+  const selectedItems = (() => {
+    const fromWardrobe = wardrobeItems.filter((item) => selectedIds.includes(item.id));
+    const fromEdit = (editItemsRef.current || [])
+      .filter((item) => selectedIds.includes(item.id) && !fromWardrobe.find((w) => w.id === item.id));
+    return [...fromWardrobe, ...fromEdit];
+  })();
 
   return (
     <ScreenWrapper horizontalPadding={false}>

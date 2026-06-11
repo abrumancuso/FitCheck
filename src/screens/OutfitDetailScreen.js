@@ -97,7 +97,7 @@ export default function OutfitDetailScreen({ route, navigation }) {
   const handleEdit = () => {
     navigation.navigate('Main', {
       screen: 'Outfits',
-      params: { editOutfit: outfit },
+      params: { editOutfit: outfit, editItems: items },
     });
   };
 
