@@ -12,7 +12,7 @@
  *   onRemove    — () => void (elimina la prenda del outfit)
  */
 
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { useAppScale } from '../utils/responsive';
@@ -97,24 +97,27 @@ export default function ItemLayerControls({ item, settings, onChange, onRemove }
         </View>
       </View>
 
-      {/* Próximamente: prueba virtual con IA */}
-      <View style={{
-        marginTop: S(8),
-        backgroundColor: '#F8F8F8',
-        borderRadius: S(8),
-        paddingVertical: S(7),
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: COLORS.border,
-        borderStyle: 'dashed',
-      }}>
+      {/* Prueba virtual con IA — abre Hugging Face en el navegador */}
+      <TouchableOpacity
+        style={{
+          marginTop: S(8),
+          backgroundColor: '#F5F0FF',
+          borderRadius: S(8),
+          paddingVertical: S(9),
+          alignItems: 'center',
+          borderWidth: 1,
+          borderColor: '#D8CFF0',
+        }}
+        onPress={() => Linking.openURL('https://yisol-idm-vton.hf.space')}
+        activeOpacity={0.7}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(6) }}>
-          <Ionicons name="sparkles-outline" size={FS(13)} color={COLORS.textLight} />
-          <Text style={{ fontSize: FS(12), fontWeight: '400', color: COLORS.textLight }}>
-            Prueba virtual con IA — próximamente
+          <Ionicons name="sparkles" size={FS(14)} color="#6B4FA0" />
+          <Text style={{ fontSize: FS(13), fontWeight: '600', color: '#6B4FA0' }}>
+            Probar con IA
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* Botón eliminar */}
       {onRemove && (
