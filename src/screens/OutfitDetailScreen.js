@@ -4,8 +4,8 @@ import {
   ScrollView, ActivityIndicator, Platform
 } from 'react-native';
 
-// LIBRERÍA COMENTADA TEMPORALMENTE PARA LA WEB
-// import * as MediaLibrary from 'expo-media-library';
+// En web, metro.config.js redirige esto a un shim no-op
+import * as MediaLibrary from 'expo-media-library';
 
 import { Ionicons } from '@expo/vector-icons';
 import ViewShot from 'react-native-view-shot';

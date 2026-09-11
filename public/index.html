@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+    <!-- ============================================================= -->
+    <!-- FitCheck — Simulación de celular en web                       -->
+    <!-- El profe ve la app dentro de un marco de 428px centrado,      -->
+    <!-- con fondo gris claro alrededor. Estilos con !important para   -->
+    <!-- que NINGÚN estilo inline de React Native Web pueda romperlos. -->
+    <!-- ============================================================= -->
+    <style id="fitcheck-phone-shell">
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #e5e1da;
+      }
+      /* Centrar el contenedor de la app (flex) */
+      #root {
+        justify-content: center;
+        align-items: stretch;
+      }
+      /* El contenedor raíz de la app: 428px, centrado, blanco, sombra */
+      #root > div {
+        width: 428px !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        align-self: stretch !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        background-color: #ffffff !important;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.18) !important;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>

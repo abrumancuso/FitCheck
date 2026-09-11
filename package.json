@@ -34,8 +34,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "predeploy": "npx expo export",
-    "deploy": "touch dist/.nojekyll && gh-pages -d dist -t"
+    "predeploy": "npx expo export --platform web",
+    "deploy": "touch dist/.nojekyll && cd dist && git init -b gh-pages -q && git add -A && git commit -m \"deploy: FitCheck web build\" -q && git push --force origin gh-pages"
   },
   "private": true,
   "devDependencies": {

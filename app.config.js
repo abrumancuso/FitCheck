@@ -23,6 +23,9 @@ export default {
     web: {
       favicon: './assets/favicon.png',
     },
+    experiments: {
+      baseUrl: '/FitCheck',
+    },
     updates: {
       url: 'https://u.expo.dev/c5fb2e99-a114-4384-8c5f-29a1345100e6',
     },
