@@ -20,6 +20,12 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "experiments": {
+      "baseUrl": "/FitCheck"
+    },
+    "plugins": [
+      "expo-status-bar"
+    ],
     "extra": {
       "eas": {
         "projectId": "c5fb2e99-a114-4384-8c5f-29a1345100e6"
