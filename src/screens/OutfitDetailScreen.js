@@ -1,21 +1,11 @@
-/**
- * OutfitDetailScreen — Vista completa de un outfit guardado
- * ==========================================================
- * Muestra el outfit en un lienzo blanco, permite
- * compartirlo y guardarlo como imagen en el dispositivo.
- */
-
 import { useRef, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Alert, Share,
   ScrollView, ActivityIndicator, Platform
 } from 'react-native';
 
-// Escudo protector: Solo carga la librería nativa si NO estamos en la web
-let MediaLibrary;
-if (Platform.OS !== 'web') {
-  MediaLibrary = require('expo-media-library');
-}
+// LIBRERÍA COMENTADA TEMPORALMENTE PARA LA WEB
+// import * as MediaLibrary from 'expo-media-library';
 
 import { Ionicons } from '@expo/vector-icons';
 import ViewShot from 'react-native-view-shot';
@@ -35,7 +25,6 @@ export default function OutfitDetailScreen({ route, navigation }) {
   const captureRef = useRef(null);
   const [saving, setSaving] = useState(false);
 
-  // Posiciones guardadas del outfit o por defecto
   const itemSettings = useMemo(() => {
     const saved = outfit.item_settings || {};
     const settings = {};
@@ -53,8 +42,6 @@ export default function OutfitDetailScreen({ route, navigation }) {
     return settings;
   }, [items, width, outfit]);
 
-  // ─── Compartir ────────────────────────────────────────────
-
   const handleShare = async () => {
     if (!captureRef.current) return;
     try {
@@ -70,10 +57,7 @@ export default function OutfitDetailScreen({ route, navigation }) {
     }
   };
 
-  // ─── Guardar a galería ────────────────────────────────────
-
   const handleSaveToGallery = async () => {
-    // Si están en la web, frenamos la acción nativa
     if (Platform.OS === 'web') {
       Alert.alert('Aviso', 'Esta función es exclusiva de la app móvil. En la web podés sacar una captura de pantalla.');
       return;
@@ -81,13 +65,10 @@ export default function OutfitDetailScreen({ route, navigation }) {
 
     if (!captureRef.current) return;
 
-    // Pedir permisos (solo en móviles)
+    // Estas funciones solo se ejecutarán en el celular
     const { status } = await MediaLibrary.requestPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
-        'Permiso necesario',
-        'Necesitamos acceso a tu galería para guardar la imagen',
-      );
+      Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galería.');
       return;
     }
 
@@ -104,8 +85,6 @@ export default function OutfitDetailScreen({ route, navigation }) {
     }
   };
 
-  // ─── Editar ─────────────────────────────────────────────────
-
   const handleEdit = () => {
     navigation.navigate('Main', {
       screen: 'Outfits',
@@ -113,128 +92,39 @@ export default function OutfitDetailScreen({ route, navigation }) {
     });
   };
 
-  // ─── Render ───────────────────────────────────────────────
-
   return (
     <ScreenWrapper>
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: VS(40) }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingTop: VS(12),
-          marginBottom: S(16),
-        }}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ marginRight: S(12) }}
-          >
+      <ScrollView contentContainerStyle={{ paddingBottom: VS(40) }} showsVerticalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: VS(12), marginBottom: S(16) }}>
+          <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={{ marginRight: S(12) }}>
             <Ionicons name="arrow-back" size={FS(24)} color={COLORS.text} />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={{
-              fontSize: FS(22), fontWeight: '700', color: COLORS.primary,
-            }}>
-              {outfit.name}
-            </Text>
-            <Text style={{
-              fontSize: FS(13), color: COLORS.textLight, marginTop: S(2),
-            }}>
-              {items.length} {items.length === 1 ? 'prenda' : 'prendas'}
-            </Text>
+            <Text style={{ fontSize: FS(22), fontWeight: '700', color: COLORS.primary }}>{outfit.name}</Text>
+            <Text style={{ fontSize: FS(13), color: COLORS.textLight, marginTop: S(2) }}>{items.length} {items.length === 1 ? 'prenda' : 'prendas'}</Text>
           </View>
         </View>
 
-        {/* Preview capturable */}
         <View style={{ alignItems: 'center', marginBottom: S(20) }}>
-          <ViewShot
-            ref={captureRef}
-            options={{ format: 'png', quality: 1.0 }}
-          >
-            <OutfitPreview
-              items={items}
-              itemSettings={itemSettings}
-              canvasWidth={width * 0.9}
-            />
+          <ViewShot ref={captureRef} options={{ format: 'png', quality: 1.0 }}>
+            <OutfitPreview items={items} itemSettings={itemSettings} canvasWidth={width * 0.9} />
           </ViewShot>
         </View>
 
-        {/* Botones de acción */}
         <View style={{ gap: S(10) }}>
-          <TouchableOpacity
-            style={{
-              backgroundColor: COLORS.primary,
-              borderRadius: S(12),
-              paddingVertical: S(14),
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              gap: S(8),
-            }}
-            onPress={handleShare}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={{ backgroundColor: COLORS.primary, borderRadius: S(12), paddingVertical: S(14), alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: S(8) }} onPress={handleShare} activeOpacity={0.85}>
             <Ionicons name="share-outline" size={FS(18)} color={COLORS.white} />
-            <Text style={{
-              fontSize: FS(16), fontWeight: '600', color: COLORS.white,
-            }}>
-              Compartir
-            </Text>
+            <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.white }}>Compartir</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={{
-              backgroundColor: COLORS.white,
-              borderRadius: S(12),
-              paddingVertical: S(14),
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              gap: S(8),
-              borderWidth: 1,
-              borderColor: COLORS.border,
-            }}
-            onPress={handleEdit}
-            activeOpacity={0.85}
-          >
+          <TouchableOpacity style={{ backgroundColor: COLORS.white, borderRadius: S(12), paddingVertical: S(14), alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: S(8), borderWidth: 1, borderColor: COLORS.border }} onPress={handleEdit} activeOpacity={0.85}>
             <Ionicons name="create-outline" size={FS(18)} color={COLORS.text} />
-            <Text style={{
-              fontSize: FS(16), fontWeight: '600', color: COLORS.text,
-            }}>
-              Editar
-            </Text>
+            <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.text }}>Editar</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={{
-              backgroundColor: COLORS.white,
-              borderRadius: S(12),
-              paddingVertical: S(14),
-              alignItems: 'center',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              gap: S(8),
-              borderWidth: 1,
-              borderColor: COLORS.border,
-            }}
-            onPress={handleSaveToGallery}
-            disabled={saving}
-            activeOpacity={0.85}
-          >
-            {saving ? (
-              <ActivityIndicator size="small" color={COLORS.text} />
-            ) : (
-              <Ionicons name="download-outline" size={FS(18)} color={COLORS.text} />
-            )}
-            <Text style={{
-              fontSize: FS(16), fontWeight: '600', color: COLORS.text,
-            }}>
-              {saving ? 'Guardando...' : 'Guardar en galería'}
-            </Text>
+          <TouchableOpacity style={{ backgroundColor: COLORS.white, borderRadius: S(12), paddingVertical: S(14), alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: S(8), borderWidth: 1, borderColor: COLORS.border }} onPress={handleSaveToGallery} disabled={saving} activeOpacity={0.85}>
+            {saving ? <ActivityIndicator size="small" color={COLORS.text} /> : <Ionicons name="download-outline" size={FS(18)} color={COLORS.text} />}
+            <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.text }}>{saving ? 'Guardando...' : 'Guardar en galería'}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
