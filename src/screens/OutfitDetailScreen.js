@@ -8,9 +8,15 @@
 import { useRef, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Alert, Share,
-  ScrollView, ActivityIndicator,
+  ScrollView, ActivityIndicator, Platform
 } from 'react-native';
-import * as MediaLibrary from 'expo-media-library';
+
+// Escudo protector: Solo carga la librería nativa si NO estamos en la web
+let MediaLibrary;
+if (Platform.OS !== 'web') {
+  MediaLibrary = require('expo-media-library');
+}
+
 import { Ionicons } from '@expo/vector-icons';
 import ViewShot from 'react-native-view-shot';
 import { COLORS } from '../constants/theme';
@@ -67,9 +73,15 @@ export default function OutfitDetailScreen({ route, navigation }) {
   // ─── Guardar a galería ────────────────────────────────────
 
   const handleSaveToGallery = async () => {
+    // Si están en la web, frenamos la acción nativa
+    if (Platform.OS === 'web') {
+      Alert.alert('Aviso', 'Esta función es exclusiva de la app móvil. En la web podés sacar una captura de pantalla.');
+      return;
+    }
+
     if (!captureRef.current) return;
 
-    // Pedir permisos
+    // Pedir permisos (solo en móviles)
     const { status } = await MediaLibrary.requestPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert(
