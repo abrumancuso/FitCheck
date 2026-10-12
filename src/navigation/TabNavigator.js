@@ -10,6 +10,7 @@ import { useAppScale } from '../utils/responsive';
 
 import HomeScreen from '../screens/HomeScreen';
 import WardrobeScreen from '../screens/WardrobeScreen';
+import VirtualFittingScreen from '../screens/VirtualFittingScreen';
 import OutfitsScreen from '../screens/OutfitsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 
@@ -18,6 +19,7 @@ const Tab = createBottomTabNavigator();
 const TAB_ICONS = {
   Home: { focused: 'home', unfocused: 'home-outline' },
   Wardrobe: { focused: 'shirt', unfocused: 'shirt-outline' },
+  Fitting: { focused: 'body', unfocused: 'body-outline' },
   Outfits: { focused: 'sparkles', unfocused: 'sparkles-outline' },
   Profile: { focused: 'person', unfocused: 'person-outline' },
 };
@@ -63,6 +65,7 @@ export default function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Inicio' }} />
       <Tab.Screen name="Wardrobe" component={WardrobeScreen} options={{ tabBarLabel: 'Wardrobe' }} />
+      <Tab.Screen name="Fitting" component={VirtualFittingScreen} options={{ tabBarLabel: 'Probador' }} />
       <Tab.Screen name="Outfits" component={OutfitsScreen} options={{ tabBarLabel: 'Outfits' }} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ tabBarLabel: 'Perfil' }} />
     </Tab.Navigator>

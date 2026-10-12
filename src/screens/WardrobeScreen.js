@@ -110,6 +110,14 @@ export default function WardrobeScreen({ navigation }) {
   const H_PADDING = S(20);
   const CARD_W = (width - H_PADDING * 2 - CARD_GAP) / 2;
 
+  // Del Armario directo al Probador Virtual (tab "Fitting"),
+  // opcionalmente con una prenda preseleccionada.
+  const goToFitting = (itemId) => {
+    impact.light();
+    if (itemId) navigation.navigate('Fitting', { itemId });
+    else navigation.navigate('Fitting');
+  };
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       if (selectedCategory && item.category !== selectedCategory) return false;
@@ -136,6 +144,7 @@ export default function WardrobeScreen({ navigation }) {
         shadowRadius: S(8),
         elevation: 3,
       }}
+      onPress={() => goToFitting(item.id)}
       onLongPress={() => handleDelete(item)}
       activeOpacity={0.85}
     >
@@ -270,25 +279,47 @@ export default function WardrobeScreen({ navigation }) {
                 {hasActiveFilters && ` filtradas`}
               </Text>
             </View>
-            {hasActiveFilters && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(8) }}>
+              {hasActiveFilters && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSelectedCategory(null);
+                    setSelectedColor(null);
+                    setSelectedSeason(null);
+                  }}
+                  style={{
+                    paddingVertical: S(4),
+                    paddingHorizontal: S(12),
+                    borderRadius: 999,
+                    backgroundColor: COLORS.primary + '15',
+                  }}
+                >
+                  <Text style={{ fontSize: FS(11), color: COLORS.primary, fontWeight: '600' }}>
+                    Limpiar
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Salto directo al Probador Virtual */}
               <TouchableOpacity
-                onPress={() => {
-                  setSelectedCategory(null);
-                  setSelectedColor(null);
-                  setSelectedSeason(null);
-                }}
+                onPress={() => goToFitting()}
                 style={{
-                  paddingVertical: S(4),
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: S(5),
+                  paddingVertical: S(6),
                   paddingHorizontal: S(12),
                   borderRadius: 999,
-                  backgroundColor: COLORS.primary + '15',
+                  backgroundColor: COLORS.primary,
                 }}
+                activeOpacity={0.85}
               >
-                <Text style={{ fontSize: FS(11), color: COLORS.primary, fontWeight: '600' }}>
-                  Limpiar
+                <Ionicons name="body-outline" size={S(14)} color="#fff" />
+                <Text style={{ fontSize: FS(11), color: '#fff', fontWeight: '600' }}>
+                  Probar
                 </Text>
               </TouchableOpacity>
-            )}
+            </View>
           </View>
         </View>
 
