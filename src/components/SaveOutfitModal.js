@@ -19,6 +19,7 @@ export default function SaveOutfitModal({
   visible,
   defaultName = '',
   saving = false,
+  errorMsg = '',
   onConfirm,
   onCancel,
 }) {
@@ -97,6 +98,17 @@ export default function SaveOutfitModal({
               fontSize: FS(15), color: COLORS.text, marginBottom: S(18),
             }}
           />
+
+          {errorMsg ? (
+            <View style={{
+              backgroundColor: '#FDECEE', borderWidth: 1, borderColor: '#E6B7BE',
+              borderRadius: S(10), padding: S(12), marginBottom: S(14),
+            }}>
+              <Text style={{ color: COLORS.primary, fontSize: FS(13), textAlign: 'center' }}>
+                {errorMsg}
+              </Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={{

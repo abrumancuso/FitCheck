@@ -709,6 +709,9 @@ async function readJson(resp) {
   }
 }
 
+const MENSAJE_LIMITE =
+  'El probador alcanzó el límite momentáneo de usos del servidor gratuito. Volvé a intentarlo en unos minutos.';
+
 function httpError(status, data) {
   const detail =
     (typeof data?.detail === 'string' && data.detail) ||
@@ -716,19 +719,19 @@ function httpError(status, data) {
     data?.error ||
     data?.title ||
     '';
-  // El 502 sale del worker cuando la IA está saturada o sin cuota (los
-  // reintentos automáticos ya se hicieron): que el usuario entienda que
-  // es un tema del servicio ajeno, no de la app.
-  const quota = /quota/i.test(String(detail));
-  const hint = quota
-    ? ' Se agotó la cuota diaria de GPU. Configurá un token de Hugging Face en el worker o esperá 24 h.'
-    : status === 502 && detail
-      ? ' El servicio de IA está saturado: esperá unos segundos y probá de nuevo.'
-      : '';
+  const texto = String(detail);
+
+  // Cuota / límite del servidor gratuito: mostrar un mensaje prolijo en
+  // español, nunca el texto técnico en inglés (ZeroGPU, quota, token, etc.).
+  const esLimite =
+    status === 502 ||
+    /zero.?gpu|quota|exceeded|runs? limit|hugging\s?face|token|gpu/i.test(texto);
+  if (esLimite) {
+    return new FittingError(MENSAJE_LIMITE, 'HTTP');
+  }
+
   return new FittingError(
-    detail
-      ? `Error ${status}: ${String(detail).slice(0, 200)}${hint}`
-      : `Error HTTP ${status}`,
+    detail ? `Error ${status}: ${texto.slice(0, 200)}` : `Error HTTP ${status}`,
     status === 401 || status === 403 ? 'UNAUTHORIZED' : 'HTTP'
   );
 }

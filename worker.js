@@ -44,11 +44,25 @@
 const HF = 'https://franciszzj-leffa.hf.space/gradio_api';
 
 /**
- * Token opcional de Hugging Face. Sin token, ZeroGPU da 2 min/día de GPU
- * (≈8-10 generaciones). Con una cuenta gratis sube a 5 min; PRO, 40 min.
- * Cloudflare: Settings → Variables and Secrets → HF_TOKEN.
+ * Tokens de Hugging Face (secretos, NUNCA en el código ni en git).
+ * Sin token, ZeroGPU da 2 min/día de GPU; con cuenta gratis, 5 min; PRO, 40 min.
+ *
+ * HF_TOKENS="hf_a,hf_b" → lista para rotar.
+ * HF_TOKEN=hf_unico     → compatibilidad con un solo token.
+ *
+ * Se devuelve un array nuevo por request: el índice de rotación vive en el
+ * alcance del request, no en una global (varios requests comparten isolate).
  */
-let HF_TOKEN = '';
+function loadHfTokens(env) {
+  const rtEnv = env || globalThis.Deno?.env;
+  const get = (k) => rtEnv?.[k] ?? rtEnv?.get?.(k) ?? '';
+  const multi = String(get('HF_TOKENS') || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean);
+  const single = String(get('HF_TOKEN') || '').trim();
+  return multi.length ? multi : single ? [single] : [];
+}
 
 /** La plataforma corta a los ~150s: respondemos un error limpio antes. */
 const DEADLINE_MS = 135000;
@@ -59,8 +73,9 @@ const FALLBACK_FN_INDEX = 2;
 /** Errores transitorios de cupo → vale la pena un reintento. */
 const CAPACITY_RE = /too many users|try again later|capacity|rate.?limit|queue.*(full|busy)/i;
 
-/** Cuota diaria de ZeroGPU agotada → reintentar no sirve, cortamos. */
-const QUOTA_RE = /quota|exceeded.*gpu|gpu.*quota/i;
+/** Cuota de ZeroGPU agotada / límite de runs → rotar de token. */
+const QUOTA_RE = /zero.?gpu|exceeded|quota|runs? limit|gpu.*(limit|quota)|token/i;
+const ROTATE_STATUS = new Set([429, 502]);
 
 /**
  * Espera entre reintentos. Sin pausa los 3 intentos chocan contra la misma
@@ -68,16 +83,18 @@ const QUOTA_RE = /quota|exceeded.*gpu|gpu.*quota/i;
  * Con backoff el reintento tiene chance real de entrar.
  */
 const RETRY_DELAYS_MS = [4000, 9000, 15000];
-const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1; // 4 intentos en total
+const BASE_ATTEMPTS = RETRY_DELAYS_MS.length + 1; // 4 para errores transitorios
+// Con rotación, cada token merece un intento (más los de backoff).
+const maxAttempts = (tokenCount) =>
+  Math.max(BASE_ATTEMPTS, tokenCount ? tokenCount + 1 : BASE_ATTEMPTS);
 
 export default {
   async fetch(request, env) {
-    // Token opcional (Cloudflare `env` o Deno). Es constante por worker,
-    // así que pisarlo en cada request es seguro aun con concurrencia.
-    if (!HF_TOKEN) {
-      const rtEnv = env || globalThis.Deno?.env;
-      HF_TOKEN = rtEnv?.HF_TOKEN || rtEnv?.get?.('HF_TOKEN') || '';
-    }
+    // Tokens por request. El índice NO es global: otro request concurrente
+    // no puede pisar el token que este está usando.
+    const tokens = loadHfTokens(env);
+    let tokenIdx = 0;
+    let token = tokens[0] || '';
 
     // ── CORS ──────────────────────────────────────────────
     if (request.method === 'OPTIONS') {
@@ -136,11 +153,11 @@ export default {
       }
 
       // ── 1. Subir foto de la persona ──────────────────────
-      const p1 = await uploadOne(HF, humanFile, humanFile.name || 'human.png', 'human');
-      const p2 = await uploadOne(HF, garmentFile, garmentFile.name || 'garment.png', 'garment');
+      const p1 = await uploadOne(HF, token, humanFile, humanFile.name || 'human.png', 'human');
+      const p2 = await uploadOne(HF, token, garmentFile, garmentFile.name || 'garment.png', 'garment');
 
       // ── 2. Resolver fn_index (sobrevive a redeploys del space) ──
-      const fnIndex = await resolveFnIndex();
+      const fnIndex = await resolveFnIndex(token);
 
       // Semilla del slider del space; 0 = "no especificada" → default 42.
       const seedVal = Number.isFinite(seed) && seed > 0 && seed <= 2147483647 ? seed : 42;
@@ -162,22 +179,36 @@ export default {
         true, // repaint: pega la foto original fuera de la máscara → conserva la cara
       ];
 
-      // ── 3. Llamar a la IA (reintentos con backoff si está saturado) ──
+      // ── 3. Llamar a la IA (reintentos con backoff / rotación de token) ──
       let lastError = 'La IA no respondió';
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const attempts = maxAttempts(tokens.length);
+      for (let attempt = 1; attempt <= attempts; attempt++) {
         try {
-          const imageUrl = await runTryon(HF, data, fnIndex, deadline);
+          const imageUrl = await runTryon(HF, token, data, fnIndex, deadline);
           return respond(200, { imageUrl });
         } catch (err) {
           if (err?.name === 'AbortError') throw err;
           lastError = err?.message || 'Error desconocido en la IA';
+
+          const msg = String(lastError);
+          const isQuota = QUOTA_RE.test(msg) || ROTATE_STATUS.has(err?.status);
           const wait = RETRY_DELAYS_MS[attempt - 1] || 0;
-          // Cuota diaria agotada: esperar no la recarga, mejor cortar.
-          // Si no, reintentamos solo si queda tiempo para esperar + correr.
+
+          // Error de cuota/límite: si queda otro token, rotar y reintentar
+          // apenas antes (sin backoff: el problema es el token, no el load).
+          if (isQuota && tokenIdx + 1 < tokens.length && attempt < attempts) {
+            tokenIdx += 1;
+            token = tokens[tokenIdx];
+            console.log(
+              `[Worker] intento ${attempt}: cuota/límite agotada; rotando a token #${tokenIdx + 1}/${tokens.length}`
+            );
+            continue;
+          }
+
+          // Sin más tokens (o error transitorio de capacidad): backoff.
           const canRetry =
-            !QUOTA_RE.test(String(lastError)) &&
             err?.retryable === true &&
-            attempt < MAX_ATTEMPTS &&
+            attempt < attempts &&
             deadline - Date.now() > wait + 15000;
           if (!canRetry) break;
           console.log(
@@ -202,17 +233,18 @@ export default {
 // ── Helpers ─────────────────────────────────────────────────
 
 class TryonError extends Error {
-  constructor(message, retryable = false) {
+  constructor(message, retryable = false, status = 0) {
     super(message);
     this.retryable = retryable;
+    this.status = status;
   }
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Headers para Hugging Face: suma el token si está configurado. */
-function hfHeaders(extra = {}) {
-  return HF_TOKEN ? { ...extra, Authorization: `Bearer ${HF_TOKEN}` } : extra;
+/** Headers para Hugging Face: suma el token de ESTE request si hay. */
+function hfHeaders(token, extra = {}) {
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
 }
 
 /**
@@ -253,7 +285,7 @@ async function toFile(response, filename) {
 }
 
 /** POST /upload → la respuesta es un array de strings (paths). */
-async function uploadOne(base, file, filename, label) {
+async function uploadOne(base, token, file, filename, label) {
   // Un Blob llega como name "blob" (sin extensión): PIL sniff igual,
   // pero gradio guarda por nombre y preferimos uno con punto.
   const safeName = filename.includes('.')
@@ -264,9 +296,11 @@ async function uploadOne(base, file, filename, label) {
   const resp = await fetch(`${base}/upload`, {
     method: 'POST',
     body: form,
-    headers: hfHeaders(),
+    headers: hfHeaders(token),
   });
-  if (!resp.ok) throw new TryonError(`Upload ${label}: ${resp.status}`);
+  if (!resp.ok) {
+    throw new TryonError(`Upload ${label}: ${resp.status}`, true, resp.status);
+  }
   const items = await resp.json();
   const item = Array.isArray(items) ? items[0] : items;
   const path = typeof item === 'string' ? item : item?.path;
@@ -279,9 +313,9 @@ async function uploadOne(base, file, filename, label) {
  * imagen + imagen + 7 opciones (radio/number) → 3 imágenes.
  * Si el space cambia, nos adaptamos; si falla, usamos el índice conocido.
  */
-async function resolveFnIndex() {
+async function resolveFnIndex(token) {
   try {
-    const resp = await fetch(`${HF}/config`, { headers: hfHeaders() });
+    const resp = await fetch(`${HF}/config`, { headers: hfHeaders(token) });
     if (!resp.ok) return FALLBACK_FN_INDEX;
     const cfg = await resp.json();
     const types = {};
@@ -320,29 +354,34 @@ async function resolveFnIndex() {
  * Flujo completo: /queue/join → SSE /queue/data → process_completed.
  * Devuelve la URL de la imagen o lanza TryonError.
  */
-async function runTryon(base, data, fnIndex, deadline) {
+async function runTryon(base, token, data, fnIndex, deadline) {
   const session = crypto.randomUUID();
 
   const joinResp = await fetch(`${base}/queue/join`, {
     method: 'POST',
-    headers: hfHeaders({ 'Content-Type': 'application/json' }),
+    headers: hfHeaders(token, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ data, fn_index: fnIndex, session_hash: session }),
   });
   if (!joinResp.ok) {
     const txt = await joinResp.text().catch(() => '');
-    throw new TryonError(`IA rechazó la llamada: ${joinResp.status} ${txt.slice(0, 150)}`, true);
+    throw new TryonError(
+      `IA rechazó la llamada: ${joinResp.status} ${txt.slice(0, 150)}`,
+      true,
+      joinResp.status
+    );
   }
   const { event_id } = await joinResp.json().catch(() => ({}));
   if (!event_id) throw new TryonError('No se recibió event_id de la IA', true);
 
   const msg = await readSSE(
     `${base}/queue/data?session_hash=${session}`,
-    deadline
+    deadline,
+    token
   );
 
   const out = msg.output || {};
   if (msg.success && !out.error) {
-    const img = await downloadResult(base, (out.data || [])[0]);
+    const img = await downloadResult(base, token, (out.data || [])[0]);
     if (img) return img.imageUrl;
     // Sin imagen descargable: algunos spaces mandan un texto de estado en
     // data[2] ("Try again latter", "URL error…", "Empty image", …).
@@ -378,7 +417,7 @@ async function runTryon(base, data, fnIndex, deadline) {
  * Por eso el worker baja los bytes AHORA y entrega un data URI: la imagen
  * viaja adentro del JSON y nada depende del cache ajeno.
  */
-async function downloadResult(base, imgData) {
+async function downloadResult(base, token, imgData) {
   // Leffa devuelve 3 imágenes y pasamos out.data[0] (el resultado), pero
   // algunos spaces devuelven GALLERY [[{ image: FileData }], …]: desarmamos
   // hasta llegar al FileData real.
@@ -411,7 +450,7 @@ async function downloadResult(base, imgData) {
 
   for (const url of candidates) {
     try {
-      const r = await fetch(url, { headers: hfHeaders() });
+      const r = await fetch(url, { headers: hfHeaders(token) });
       if (!r.ok) continue;
       const blob = await r.blob();
       return { imageUrl: await blobToDataUri(blob) };
@@ -431,7 +470,7 @@ async function blobToDataUri(blob) {
   return `data:${blob.type || 'image/png'};base64,${btoa(bin)}`;
 }
 
-async function readSSE(url, deadline) {
+async function readSSE(url, deadline, token) {
   // Cortamos el stream antes del límite de la plataforma: si el modelo no
   // terminó a tiempo, devolvemos un error prolijo en vez de uno opaco.
   const ctrl = new AbortController();
@@ -439,14 +478,14 @@ async function readSSE(url, deadline) {
 
   let resp;
   try {
-    resp = await fetch(url, { signal: ctrl.signal, headers: hfHeaders() });
+    resp = await fetch(url, { signal: ctrl.signal, headers: hfHeaders(token) });
   } catch (err) {
     clearTimeout(killer);
     throw err;
   }
   if (!resp.ok) {
     clearTimeout(killer);
-    throw new TryonError(`Stream de la IA: HTTP ${resp.status}`, true);
+    throw new TryonError(`Stream de la IA: HTTP ${resp.status}`, true, resp.status);
   }
 
   const reader = resp.body.getReader();

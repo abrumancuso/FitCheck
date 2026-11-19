@@ -91,6 +91,7 @@ export default function VirtualFittingScreen({ navigation, route }) {
   // Guardado del resultado en Outfits (una sola vez por resultado)
   const [showSaveOutfit, setShowSaveOutfit] = useState(false);
   const [savingOutfit, setSavingOutfit] = useState(false);
+  const [saveOutfitError, setSaveOutfitError] = useState('');
   const [outfitName, setOutfitName] = useState('');
   const [savedOutfit, setSavedOutfit] = useState(null);
 
@@ -358,6 +359,7 @@ export default function VirtualFittingScreen({ navigation, route }) {
 
   const openSaveOutfit = () => {
     setOutfitName(defaultOutfitName());
+    setSaveOutfitError('');
     setShowSaveOutfit(true);
   };
 
@@ -376,6 +378,7 @@ export default function VirtualFittingScreen({ navigation, route }) {
     if (savingOutfitRef.current || savedOutfit || !resultUrl) return;
     savingOutfitRef.current = true;
     setSavingOutfit(true);
+    setSaveOutfitError('');
     let uploadedPath = null;
 
     try {
@@ -398,7 +401,8 @@ export default function VirtualFittingScreen({ navigation, route }) {
     } catch (e) {
       console.warn('[outfits] error al guardar look IA:', e?.message);
       if (uploadedPath) await removeOutfitImage(uploadedPath);
-      Alert.alert('Error', 'No se pudo guardar el look en Outfits. Probá de nuevo.');
+      // En la web Alert.alert es un no-op: mostramos el motivo en el modal.
+      setSaveOutfitError(e?.message || 'No se pudo guardar el look en Outfits.');
     } finally {
       savingOutfitRef.current = false;
       setSavingOutfit(false);
@@ -1049,6 +1053,7 @@ export default function VirtualFittingScreen({ navigation, route }) {
           visible
           defaultName={outfitName}
           saving={savingOutfit}
+          errorMsg={saveOutfitError}
           onConfirm={handleSaveToOutfit}
           onCancel={() => setShowSaveOutfit(false)}
         />
