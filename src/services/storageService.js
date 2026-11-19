@@ -45,3 +45,40 @@ export const uploadClothingImage = async (userId, itemId, imageUri) => {
   console.log('[storage] publicUrl:', publicUrl?.substring(0, 80));
   return publicUrl;
 };
+
+/**
+ * Sube el PNG del resultado del probador (con marca de agua quemada).
+ * Devuelve la URL pública y el path para poder hacer rollback si el INSERT
+ * en `outfits` falla. Mismo bucket, carpeta distinta: users/<uid>/outfits/.
+ *
+ * @param {string} userId
+ * @param {string} imageUri — URI local del PNG capturado con view-shot
+ * @returns {Promise<{url: string, path: string}>}
+ */
+export const uploadOutfitImage = async (userId, imageUri) => {
+  if (!userId) throw new Error('No hay usuario autenticado');
+  if (!imageUri) throw new Error('No hay imagen para subir');
+
+  const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
+  const filePath = `users/${userId}/outfits/${fileName}`;
+
+  const imageFile = new File(imageUri);
+  const arrayBuffer = await imageFile.arrayBuffer();
+
+  const { error } = await supabase.storage.from(BUCKET).upload(filePath, arrayBuffer, {
+    contentType: 'image/png',
+    upsert: false,
+  });
+  if (error) throw error;
+
+  const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
+  if (!publicUrl) throw new Error('No se pudo obtener la URL pública');
+  return { url: publicUrl, path: filePath };
+};
+
+/** Limpieza si falló el guardado del registro después del upload. */
+export const removeOutfitImage = async (path) => {
+  if (!path) return;
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  if (error) console.warn('[storage] no se pudo borrar imagen huérfana:', error?.message);
+};

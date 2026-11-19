@@ -1,7 +1,7 @@
 import { useRef, useMemo, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Alert, Share,
-  ScrollView, ActivityIndicator, Platform
+  ScrollView, ActivityIndicator, Platform, Image
 } from 'react-native';
 
 // En web, metro.config.js redirige esto a un shim no-op
@@ -24,6 +24,11 @@ export default function OutfitDetailScreen({ route, navigation }) {
 
   const captureRef = useRef(null);
   const [saving, setSaving] = useState(false);
+
+  // Los looks generados por IA muestran su imagen guardada; los manuales
+  // siguen componiéndose con OutfitPreview como siempre.
+  const generatedImage = outfit.image_url || outfit.imageUrl || null;
+  const isAiLook = !!outfit.is_ai_generated || !!generatedImage;
 
   const itemSettings = useMemo(() => {
     const saved = outfit.item_settings || {};
@@ -86,6 +91,9 @@ export default function OutfitDetailScreen({ route, navigation }) {
   };
 
   const handleEdit = () => {
+    // Un look IA es una foto final: abrir el builder viejo la dejaría
+    // fuera de pantalla y al guardar pisaría la imagen generada.
+    if (isAiLook) return;
     navigation.navigate('Main', {
       screen: 'Outfits',
       params: { editOutfit: outfit, editItems: items },
@@ -107,7 +115,20 @@ export default function OutfitDetailScreen({ route, navigation }) {
 
         <View style={{ alignItems: 'center', marginBottom: S(20) }}>
           <ViewShot ref={captureRef} options={{ format: 'png', quality: 1.0 }}>
-            <OutfitPreview items={items} itemSettings={itemSettings} canvasWidth={width * 0.9} />
+            {generatedImage ? (
+              <Image
+                source={{ uri: generatedImage }}
+                style={{
+                  width: width * 0.9,
+                  aspectRatio: 3 / 4,
+                  borderRadius: S(16),
+                  backgroundColor: '#F5F0EB',
+                }}
+                resizeMode="cover"
+              />
+            ) : (
+              <OutfitPreview items={items} itemSettings={itemSettings} canvasWidth={width * 0.9} />
+            )}
           </ViewShot>
         </View>
 
@@ -117,10 +138,19 @@ export default function OutfitDetailScreen({ route, navigation }) {
             <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.white }}>Compartir</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={{ backgroundColor: COLORS.white, borderRadius: S(12), paddingVertical: S(14), alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: S(8), borderWidth: 1, borderColor: COLORS.border }} onPress={handleEdit} activeOpacity={0.85}>
-            <Ionicons name="create-outline" size={FS(18)} color={COLORS.text} />
-            <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.text }}>Editar</Text>
-          </TouchableOpacity>
+          {isAiLook ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: S(8), paddingVertical: S(10) }}>
+              <Ionicons name="lock-closed-outline" size={FS(15)} color={COLORS.textLight} />
+              <Text style={{ fontSize: FS(12), color: COLORS.textLight }}>
+                Look generado por IA · no editable
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={{ backgroundColor: COLORS.white, borderRadius: S(12), paddingVertical: S(14), alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: S(8), borderWidth: 1, borderColor: COLORS.border }} onPress={handleEdit} activeOpacity={0.85}>
+              <Ionicons name="create-outline" size={FS(18)} color={COLORS.text} />
+              <Text style={{ fontSize: FS(16), fontWeight: '600', color: COLORS.text }}>Editar</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={{ backgroundColor: COLORS.white, borderRadius: S(12), paddingVertical: S(14), alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: S(8), borderWidth: 1, borderColor: COLORS.border }} onPress={handleSaveToGallery} disabled={saving} activeOpacity={0.85}>
             {saving ? <ActivityIndicator size="small" color={COLORS.text} /> : <Ionicons name="download-outline" size={FS(18)} color={COLORS.text} />}

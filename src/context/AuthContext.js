@@ -3,15 +3,19 @@
  * =============================================
  *
  * Provee a TODA la app de:
- *   - user        → el usuario actual (o null si no hay sesión)
- *   - loading     → true mientras Supabase verifica si hay sesión
- *   - login()     → inicia sesión con email + contraseña
- *   - register()  → crea una cuenta nueva
- *   - logout()    → cierra la sesión
+ *   - user            → el usuario actual (o null si no hay sesión)
+ *   - loading         → true mientras Supabase verifica si hay sesión
+ *   - bodyPhotoUrl    → URL de la foto de cuerpo guardada en user_metadata
+ *   - bodyPhotoVersion→ número de versión (cache-busting al reemplazarla)
+ *   - syncUser()      → refresca el usuario después de actualizar metadata
+ *   - login()         → inicia sesión con email + contraseña
+ *   - register()      → crea una cuenta nueva
+ *   - logout()        → cierra la sesión
  */
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../config/supabaseClient';
+import { getBodyPhotoUrl, getBodyPhotoVersion } from '../services/bodyPhotoService';
 
 const AuthContext = createContext(null);
 
@@ -46,8 +50,35 @@ export function AuthProvider({ children }) {
     return supabase.auth.signOut();
   };
 
+  /**
+   * Después de un `auth.updateUser` usamos el usuario que devuelve la propia
+   * llamada (si viene) para no hacer otro request. Si no viene, lo buscamos.
+   * De esta forma TODA la app ve la nueva foto sin recargar ni re-loguearse.
+   */
+  const syncUser = useCallback(async (freshUser) => {
+    if (freshUser) {
+      setUser(freshUser);
+      return freshUser;
+    }
+    const { data: { user: current } } = await supabase.auth.getUser();
+    if (current) setUser(current);
+    return current;
+  }, []);
+
+  const bodyPhotoUrl = getBodyPhotoUrl(user);
+  const bodyPhotoVersion = getBodyPhotoVersion(user);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      bodyPhotoUrl,
+      bodyPhotoVersion,
+      syncUser,
+      login,
+      register,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -24,7 +24,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import * as ImagePicker from 'expo-image-picker';
 // En web, metro.config.js redirige esto a un shim no-op
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
@@ -33,6 +32,8 @@ import { File, Paths } from 'expo-file-system';
 
 import { useAuth } from '../context/AuthContext';
 import { getClothingItems } from '../services/clothingService';
+import { addOutfit } from '../services/outfitService';
+import { uploadOutfitImage, removeOutfitImage } from '../services/storageService';
 import {
   generateTryOn,
   cancelTryOn,
@@ -40,9 +41,14 @@ import {
   isTryOnSupported,
   isFittingConfigured,
 } from '../services/aiFittingService';
+import { getMissingItemSuggestion } from '../services/recommendationService';
+import { withCacheBuster } from '../services/bodyPhotoService';
+import { useBodyPhoto } from '../hooks/useBodyPhoto';
 import { COLORS } from '../constants/theme';
 import { useAppScale } from '../utils/responsive';
 import ScreenWrapper from '../components/ScreenWrapper';
+import MissingItemSuggestionModal from '../components/MissingItemSuggestionModal';
+import SaveOutfitModal from '../components/SaveOutfitModal';
 import { impact, notification, selection } from '../utils/haptics';
 
 const LOGO = require('../../assets/icon.png');
@@ -50,6 +56,7 @@ const LOGO = require('../../assets/icon.png');
 export default function VirtualFittingScreen({ navigation, route }) {
   const { scale, fontScale, verticalScale } = useAppScale();
   const { user } = useAuth();
+  const { bodyPhotoUrl, bodyPhotoVersion, changePhoto, uploading: uploadingPhoto } = useBodyPhoto();
 
   const S = (n) => scale(n);
   const FS = (n) => fontScale(n);
@@ -57,6 +64,9 @@ export default function VirtualFittingScreen({ navigation, route }) {
   const H_PADDING = S(24);
 
   const captureRef = useRef(null);
+  // Guardia sincrónica: el estado `savingOutfit` no alcanza si el usuario
+  // toca "Guardar" dos veces antes del próximo render.
+  const savingOutfitRef = useRef(false);
 
   // Composite nativo de la prenda (fondo blanco): view-shot necesita un
   // View montado y cargado para capturarlo. Los refs median la espera.
@@ -75,6 +85,14 @@ export default function VirtualFittingScreen({ navigation, route }) {
   const [resultAspect, setResultAspect] = useState(3 / 4);
   const [imageReady, setImageReady] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showSuggestion, setShowSuggestion] = useState(false);
+  const [suggestion, setSuggestion] = useState(null);
+
+  // Guardado del resultado en Outfits (una sola vez por resultado)
+  const [showSaveOutfit, setShowSaveOutfit] = useState(false);
+  const [savingOutfit, setSavingOutfit] = useState(false);
+  const [outfitName, setOutfitName] = useState('');
+  const [savedOutfit, setSavedOutfit] = useState(null);
 
   const selectedItems = items.filter((i) => selectedIds.includes(i.id));
 
@@ -90,7 +108,9 @@ export default function VirtualFittingScreen({ navigation, route }) {
   useFocusEffect(
     useCallback(() => {
       loadItems();
-    }, [])
+      // Precarga automática: la foto vive en el perfil, no en este componente.
+      if (bodyPhotoUrl) setBodyUri(bodyPhotoUrl);
+    }, [bodyPhotoUrl, bodyPhotoVersion])
   );
 
   // Llegada desde el Armario con una prenda preseleccionada
@@ -107,37 +127,39 @@ export default function VirtualFittingScreen({ navigation, route }) {
     setError(null);
     setStatus('idle');
     setStatusText('');
+    // Cada resultado nuevo arranca sin "guardado en Outfits".
+    setSavedOutfit(null);
+    setShowSaveOutfit(false);
+    setOutfitName('');
   };
 
   // ── Foto de cuerpo ──────────────────────────────────────────
 
-  const pickBody = async (source) => {
+  /**
+   * Elegir, subir y guardar en el perfil en un solo paso. La URL devuelta
+   * reemplaza a la anterior en Storage (mismo path + upsert: no queda basura).
+   */
+  const handleChangePhoto = async (source = 'gallery') => {
     impact.light();
-    try {
-      let result;
-
-      if (source === 'camera') {
-        const { status } = await ImagePicker.requestCameraPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permiso necesario', 'Necesitamos acceso a la cámara');
-          return;
-        }
-        result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.7 });
-      } else {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permiso necesario', 'Necesitamos acceso a tu galería');
-          return;
-        }
-        result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7 });
-      }
-
-      if (result.canceled) return;
-      setBodyUri(result.assets[0].uri);
+    const result = await changePhoto(source);
+    if (result?.url) {
+      setBodyUri(result.url);
       clearResult();
-    } catch (e) {
-      Alert.alert('Error', 'No se pudo cargar la foto');
+      notification.success();
     }
+  };
+
+  /** En nativo ofrecemos cámara y galería; en web solo galería (input file). */
+  const confirmChangePhoto = () => {
+    if (Platform.OS === 'web') {
+      handleChangePhoto('gallery');
+      return;
+    }
+    Alert.alert('Foto de cuerpo', '¿Desde dónde querés elegirla?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Galería', onPress: () => handleChangePhoto('gallery') },
+      { text: 'Cámara', onPress: () => handleChangePhoto('camera') },
+    ]);
   };
 
   // ── Generación ──────────────────────────────────────────────
@@ -240,6 +262,15 @@ export default function VirtualFittingScreen({ navigation, route }) {
       setResultUrl(url);
       setStatus('done');
       notification.success();
+
+      // Sugerir prenda faltante para combinar (demostración)
+      try {
+        const missing = getMissingItemSuggestion(items, selectedItems);
+        if (missing) {
+          setSuggestion(missing);
+          setTimeout(() => setShowSuggestion(true), 600);
+        }
+      } catch (_) {}
     } catch (e) {
       if (e?.code === 'CANCELLED') {
         setStatus('idle');
@@ -318,6 +349,56 @@ export default function VirtualFittingScreen({ navigation, route }) {
       Alert.alert('Error', 'No se pudo guardar la imagen');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ── Guardar el resultado en Outfits ────────────────────────
+
+  const defaultOutfitName = () => `Look IA - ${new Date().toLocaleDateString('es-AR')}`;
+
+  const openSaveOutfit = () => {
+    setOutfitName(defaultOutfitName());
+    setShowSaveOutfit(true);
+  };
+
+  /** Captura imagen + watermark en caché estable (iOS purga tmp/ReactNative). */
+  const captureStableResult = async () => {
+    const captured = await captureRef.current.capture();
+    const stable = new File(Paths.cache, `outfit-ia-${Date.now()}.png`);
+    await new File(captured).copy(stable);
+    return stable.uri;
+  };
+
+  const handleSaveToOutfit = async (name) => {
+    if (savingOutfitRef.current || savedOutfit || !resultUrl) return;
+    savingOutfitRef.current = true;
+    setSavingOutfit(true);
+    let uploadedPath = null;
+
+    try {
+      const localUri = await captureStableResult();
+      const { url, path } = await uploadOutfitImage(user.id, localUri);
+      uploadedPath = path;
+
+      const record = await addOutfit(user.id, {
+        name: (name || '').trim() || defaultOutfitName(),
+        itemIds: selectedIds,
+        itemSettings: {}, // el look IA no es editable en el builder de posiciones
+        imageUrl: url,
+        isAiGenerated: true,
+      });
+
+      setSavedOutfit(record);
+      setShowSaveOutfit(false);
+      notification.success();
+      Alert.alert('Listo', 'El look se guardó en Outfits');
+    } catch (e) {
+      console.warn('[outfits] error al guardar look IA:', e?.message);
+      if (uploadedPath) await removeOutfitImage(uploadedPath);
+      Alert.alert('Error', 'No se pudo guardar el look en Outfits. Probá de nuevo.');
+    } finally {
+      savingOutfitRef.current = false;
+      setSavingOutfit(false);
     }
   };
 
@@ -410,11 +491,34 @@ export default function VirtualFittingScreen({ navigation, route }) {
               borderColor: '#E8E0D6',
               borderStyle: 'dashed',
             }}
-            onPress={() => pickBody('gallery')}
+            onPress={bodyUri ? undefined : () => handleChangePhoto('gallery')}
             activeOpacity={0.85}
           >
             {bodyUri ? (
-              <Image source={{ uri: bodyUri }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+              <>
+                <Image
+                  source={{ uri: withCacheBuster(bodyUri, bodyPhotoVersion) }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                />
+                {/* Botón sutil y siempre visible sobre la foto */}
+                <TouchableOpacity
+                  style={{
+                    position: 'absolute', top: S(10), right: S(10),
+                    flexDirection: 'row', alignItems: 'center', gap: S(4),
+                    backgroundColor: 'rgba(0,0,0,0.45)',
+                    borderRadius: S(20),
+                    paddingHorizontal: S(10), paddingVertical: S(6),
+                  }}
+                  onPress={confirmChangePhoto}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="create-outline" size={FS(13)} color={COLORS.white} />
+                  <Text style={{ fontSize: FS(11), fontWeight: '600', color: COLORS.white }}>
+                    Cambiar foto
+                  </Text>
+                </TouchableOpacity>
+              </>
             ) : (
               <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                 <Ionicons name="scan-outline" size={S(40)} color="#E8E0D6" />
@@ -424,24 +528,48 @@ export default function VirtualFittingScreen({ navigation, route }) {
                 <Text style={{ fontSize: FS(11), color: COLORS.textLight, marginTop: S(4) }}>
                   De frente, con buena luz, sin espejo
                 </Text>
+                <Text style={{ fontSize: FS(11), color: COLORS.primary, marginTop: S(8) }}>
+                  Se guarda en tu perfil y la reutilizamos siempre
+                </Text>
+              </View>
+            )}
+
+            {uploadingPhoto && (
+              <View style={{
+                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(253,248,240,0.9)',
+                justifyContent: 'center', alignItems: 'center', gap: S(8),
+              }}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={{ fontSize: FS(12), color: COLORS.primary }}>
+                  Guardando en tu perfil…
+                </Text>
               </View>
             )}
           </TouchableOpacity>
 
           <View style={{ flexDirection: 'row', gap: S(8), marginTop: S(8) }}>
-            <TouchableOpacity style={smallBtn} onPress={() => pickBody('camera')} activeOpacity={0.85}>
-              <Ionicons name="camera-outline" size={FS(16)} color={COLORS.text} />
-              <Text style={{ fontSize: FS(13), fontWeight: '600', color: COLORS.text }}>
-                Cámara
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={smallBtn} onPress={() => pickBody('gallery')} activeOpacity={0.85}>
+            {Platform.OS !== 'web' && (
+              <TouchableOpacity style={smallBtn} onPress={() => handleChangePhoto('camera')} activeOpacity={0.85}>
+                <Ionicons name="camera-outline" size={FS(16)} color={COLORS.text} />
+                <Text style={{ fontSize: FS(13), fontWeight: '600', color: COLORS.text }}>
+                  Cámara
+                </Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={smallBtn} onPress={() => handleChangePhoto('gallery')} activeOpacity={0.85}>
               <Ionicons name="image-outline" size={FS(16)} color={COLORS.text} />
               <Text style={{ fontSize: FS(13), fontWeight: '600', color: COLORS.text }}>
                 Galería
               </Text>
             </TouchableOpacity>
           </View>
+
+          {!!bodyUri && (
+            <Text style={{ fontSize: FS(11), color: COLORS.textLight, marginTop: S(6) }}>
+              Foto guardada en tu perfil · se precarga automáticamente
+            </Text>
+          )}
 
           {/* ── 2. TUS PRENDAS ──────────────────────────────── */}
 
@@ -755,6 +883,50 @@ export default function VirtualFittingScreen({ navigation, route }) {
                   </Text>
                 </TouchableOpacity>
 
+                {/* Unificado con el módulo Outfits */}
+                <TouchableOpacity
+                  style={[ghostBtn, {
+                    borderColor: savedOutfit ? COLORS.success : COLORS.gold,
+                    backgroundColor: savedOutfit ? '#EAF7EF' : `${COLORS.gold}12`,
+                    opacity: !imageReady || savingOutfit ? 0.6 : 1,
+                  }]}
+                  onPress={savedOutfit ? undefined : openSaveOutfit}
+                  disabled={!!savedOutfit || !imageReady || savingOutfit}
+                  activeOpacity={0.85}
+                >
+                  {savingOutfit ? (
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                  ) : (
+                    <Ionicons
+                      name={savedOutfit ? 'checkmark-circle' : 'bookmark-outline'}
+                      size={FS(18)}
+                      color={savedOutfit ? COLORS.success : COLORS.primary}
+                    />
+                  )}
+                  <Text style={{
+                    fontSize: FS(15), fontWeight: '600',
+                    color: savedOutfit ? COLORS.success : COLORS.primary,
+                  }}>
+                    {savingOutfit
+                      ? 'Guardando en Outfits…'
+                      : savedOutfit
+                        ? 'Guardado en Outfits ✓'
+                        : 'Guardar en Outfits'}
+                  </Text>
+                </TouchableOpacity>
+
+                {!!savedOutfit && (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Main', { screen: 'Outfits' })}
+                    activeOpacity={0.85}
+                    style={{ paddingVertical: S(4), alignItems: 'center' }}
+                  >
+                    <Text style={{ fontSize: FS(12), color: COLORS.primary }}>
+                      Ver en Outfits
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
                   style={{
                     paddingVertical: S(10),
@@ -861,6 +1033,23 @@ export default function VirtualFittingScreen({ navigation, route }) {
           </View>
         ) : null}
       </View>
+
+      <MissingItemSuggestionModal
+        visible={showSuggestion}
+        suggestion={suggestion}
+        onClose={() => setShowSuggestion(false)}
+      />
+
+      {/* Se monta al abrir: el TextInput toma el nombre default de este resultado */}
+      {showSaveOutfit && (
+        <SaveOutfitModal
+          visible
+          defaultName={outfitName}
+          saving={savingOutfit}
+          onConfirm={handleSaveToOutfit}
+          onCancel={() => setShowSaveOutfit(false)}
+        />
+      )}
     </ScreenWrapper>
   );
 }

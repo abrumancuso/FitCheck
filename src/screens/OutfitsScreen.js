@@ -88,6 +88,18 @@ export default function OutfitsScreen({ navigation, route }) {
     const edit = route.params?.editOutfit;
     if (!edit) return;
 
+    // Red de seguridad: aunque quede un `editOutfit` viejo en la navegación,
+    // un look IA NUNCA entra al builder (no tiene posiciones editables y
+    // guardarlo borraría su imagen). Se muestra el detalle, que sí la tiene.
+    if (edit.is_ai_generated || edit.image_url || edit.imageUrl) {
+      navigation.setParams({ editOutfit: undefined, editItems: undefined });
+      navigation.navigate('OutfitDetail', {
+        outfit: edit,
+        items: route.params?.editItems || [],
+      });
+      return;
+    }
+
     // Si wardrobeItems está vacío (ej: re-mount del tab), cargarlos
     if (wardrobeItems.length === 0 && user?.id) {
       loadData();
@@ -360,6 +372,11 @@ export default function OutfitsScreen({ navigation, route }) {
         .map((id) => wardrobeItems.find((w) => w.id === id))
         .filter(Boolean);
 
+      // Los looks de IA traen su propia imagen; los manuales siguen mostrando
+      // la primera prenda como hacían siempre.
+      const previewUri = item.image_url || item.imageUrl
+        || firstItem?.imageUrl || firstItem?.image_url;
+
       return (
         <TouchableOpacity
           style={{
@@ -383,14 +400,24 @@ export default function OutfitsScreen({ navigation, route }) {
           activeOpacity={0.85}
         >
           <View style={{ width: S(48), height: S(48), borderRadius: S(8), overflow: 'hidden', marginRight: S(12), backgroundColor: firstItem?.color || '#E8E0D6', justifyContent: 'center', alignItems: 'center' }}>
-            {(firstItem?.imageUrl || firstItem?.image_url) ? (
-              <Image source={{ uri: firstItem?.imageUrl || firstItem?.image_url }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+            {previewUri ? (
+              <Image source={{ uri: previewUri }} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
             ) : (
               <Ionicons name="shirt-outline" size={S(22)} color={COLORS.white} />
             )}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: FS(15), fontWeight: '600', color: '#1A1A1A' }}>{item.name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: S(6) }}>
+              <Text style={{ fontSize: FS(15), fontWeight: '600', color: '#1A1A1A' }}>{item.name}</Text>
+              {!!item.is_ai_generated && (
+                <View style={{
+                  backgroundColor: `${COLORS.gold}22`, borderRadius: S(6),
+                  paddingHorizontal: S(6), paddingVertical: S(2),
+                }}>
+                  <Text style={{ fontSize: FS(9), fontWeight: '700', color: COLORS.gold }}>IA</Text>
+                </View>
+              )}
+            </View>
             <Text style={{ fontSize: FS(12), color: COLORS.textLight, marginTop: S(2) }}>
               {(item.item_count || itemIds.length)} {(item.item_count || itemIds.length) === 1 ? 'prenda' : 'prendas'}
             </Text>

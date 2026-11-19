@@ -225,7 +225,7 @@ function normalizeOutput(output) {
 
 // ── Mapeo de categorías (clóset FitCheck → IDM-VTON) ──────────
 
-const LOWER_BODY = ['Pantalón', 'Short', 'Falda', 'Pollera'];
+const LOWER_BODY = ['Pantalón', 'Short', 'Falda', 'Pollera', 'Jean'];
 const DRESSES = ['Vestido'];
 const UNSUPPORTED = ['Zapatos', 'Zapatillas', 'Cartera', 'Accesorio'];
 
@@ -332,6 +332,7 @@ export async function generateTryOn({
         const out = await runProxy({
           humanUri: human,
           garmentUri: g.uri,
+          category: g.category,
           description: g.description || description || '',
           onStatus: stepStatus,
           job,
@@ -539,7 +540,15 @@ async function runFal({ humanUri, garmentUri, description, onStatus, job }) {
 // Contrato igual a worker.js: multipart con human_image/garment_image,
 // responde { imageUrl }. La API key queda DENTRO del worker.
 
-async function runProxy({ humanUri, garmentUri, description, onStatus, job, keepHumanPng = false }) {
+async function runProxy({
+  humanUri,
+  garmentUri,
+  category,
+  description,
+  onStatus,
+  job,
+  keepHumanPng = false,
+}) {
   if (!PROXY_URL) {
     throw new FittingError('Falta EXPO_PUBLIC_AIFIT_API_BASE en el archivo .env', 'NO_CONFIG');
   }
@@ -627,6 +636,8 @@ async function runProxy({ humanUri, garmentUri, description, onStatus, job, keep
   form.append('human_image', humanPart);
   form.append('garment_image', garmentPart);
   form.append('description', description || '');
+  // OOTDiffusion necesita saber qué zona vestir (torso / piernas / vestido).
+  form.append('category', mapGarmentCategory(category));
 
   onStatus?.('Enviando a la nube…');
 
@@ -705,11 +716,13 @@ function httpError(status, data) {
     data?.error ||
     data?.title ||
     '';
-  // El 502 sale del worker cuando la IA está saturada (los reintentos
-  // automáticos ya se hicieron): que el usuario entienda que es un tema
-  // del servicio ajeno, no de la app.
-  const hint =
-    status === 502 && detail
+  // El 502 sale del worker cuando la IA está saturada o sin cuota (los
+  // reintentos automáticos ya se hicieron): que el usuario entienda que
+  // es un tema del servicio ajeno, no de la app.
+  const quota = /quota/i.test(String(detail));
+  const hint = quota
+    ? ' Se agotó la cuota diaria de GPU. Configurá un token de Hugging Face en el worker o esperá 24 h.'
+    : status === 502 && detail
       ? ' El servicio de IA está saturado: esperá unos segundos y probá de nuevo.'
       : '';
   return new FittingError(

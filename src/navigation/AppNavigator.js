@@ -10,6 +10,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
+import { shouldShowBodyPhotoPrompt } from '../services/bodyPhotoService';
 import { COLORS } from '../constants/theme';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -17,6 +18,7 @@ import RegisterScreen from '../screens/RegisterScreen';
 import AddClothingScreen from '../screens/AddClothingScreen';
 import OutfitDetailScreen from '../screens/OutfitDetailScreen';
 import TabNavigator from './TabNavigator';
+import BodyPhotoOnboarding from '../components/BodyPhotoOnboarding';
 
 const Stack = createNativeStackNavigator();
 
@@ -32,22 +34,28 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <>
-            <Stack.Screen name="Main" component={TabNavigator} />
-            <Stack.Screen name="AddClothing" component={AddClothingScreen} />
-            <Stack.Screen name="OutfitDetail" component={OutfitDetailScreen} />
-          </>
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            <>
+              <Stack.Screen name="Main" component={TabNavigator} />
+              <Stack.Screen name="AddClothing" component={AddClothingScreen} />
+              <Stack.Screen name="OutfitDetail" component={OutfitDetailScreen} />
+            </>
+          ) : (
+            <>
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+
+      {/* Fuera del NavigationContainer: es un overlay, no una ruta.
+          Se desmonta solo cuando hay foto O cuando eligió "más tarde". */}
+      {shouldShowBodyPhotoPrompt(user) && <BodyPhotoOnboarding />}
+    </>
   );
 }
 

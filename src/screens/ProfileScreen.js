@@ -4,9 +4,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, ScrollView, ActivityIndicator, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useBodyPhoto } from '../hooks/useBodyPhoto';
+import { withCacheBuster } from '../services/bodyPhotoService';
 import { getClothingItems } from '../services/clothingService';
 import { getOutfits } from '../services/outfitService';
 import { COLORS } from '../constants/theme';
@@ -16,6 +18,7 @@ import ScreenWrapper from '../components/ScreenWrapper';
 export default function ProfileScreen() {
   const { scale, fontScale, verticalScale } = useAppScale();
   const { user, logout } = useAuth();
+  const { bodyPhotoUrl, bodyPhotoVersion, changePhoto, uploading: uploadingPhoto } = useBodyPhoto();
   const [items, setItems] = useState([]);
   const [outfits, setOutfits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,6 +45,23 @@ export default function ProfileScreen() {
     ]);
   };
 
+  /** Misma modalidad que el Probador: cámara + galería en móvil. */
+  const confirmChangePhoto = () => {
+    if (Platform.OS === 'web') {
+      changePhoto('gallery');
+      return;
+    }
+    Alert.alert('Foto de cuerpo', '¿Desde dónde querés elegirla?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Galería', onPress: () => changePhoto('gallery') },
+      { text: 'Cámara', onPress: () => changePhoto('camera') },
+    ]);
+  };
+
+  const previewSource = bodyPhotoUrl
+    ? withCacheBuster(bodyPhotoUrl, bodyPhotoVersion)
+    : null;
+
   const initials = (user?.email?.[0] || 'F').toUpperCase();
   const S = (n) => scale(n);
   const FS = (n) => fontScale(n);
@@ -65,14 +85,25 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: VS(40) }}>
         {/* Header */}
         <View style={{ alignItems: 'center', paddingTop: VS(24) }}>
-          <View style={{
-            width: S(72), height: S(72), borderRadius: S(36),
-            backgroundColor: COLORS.primary,
-            justifyContent: 'center', alignItems: 'center',
-            marginBottom: S(12),
-          }}>
-            <Text style={{ fontSize: FS(28), fontWeight: '700', color: '#fff' }}>{initials}</Text>
-          </View>
+          {previewSource ? (
+            <Image
+              source={{ uri: previewSource }}
+              style={{
+                width: S(72), height: S(72), borderRadius: S(36),
+                borderWidth: S(2), borderColor: COLORS.gold,
+                marginBottom: S(12),
+              }}
+            />
+          ) : (
+            <View style={{
+              width: S(72), height: S(72), borderRadius: S(36),
+              backgroundColor: COLORS.primary,
+              justifyContent: 'center', alignItems: 'center',
+              marginBottom: S(12),
+            }}>
+              <Text style={{ fontSize: FS(28), fontWeight: '700', color: '#fff' }}>{initials}</Text>
+            </View>
+          )}
           <Text style={{ fontSize: FS(15), color: '#1A1A1A', fontWeight: '500', marginBottom: S(4) }}>
             {user?.email}
           </Text>
@@ -81,6 +112,81 @@ export default function ProfileScreen() {
             <Text style={{ fontSize: FS(12), color: COLORS.textLight }}>
               Miembro desde {new Date(user?.created_at || Date.now()).toLocaleDateString('es-AR', { year: 'numeric', month: 'long' })}
             </Text>
+          </View>
+        </View>
+
+        {/* ─── Foto de cuerpo ──────────────────────── */}
+
+        <View style={{ marginBottom: S(24) }}>
+          <Text style={{
+            fontSize: FS(13), fontWeight: '700', color: COLORS.text,
+            letterSpacing: 0.8, marginBottom: S(10), textTransform: 'uppercase',
+          }}>
+            Foto de cuerpo
+          </Text>
+
+          <View style={{
+            backgroundColor: COLORS.white,
+            borderRadius: S(14),
+            borderWidth: 1,
+            borderColor: COLORS.border,
+            overflow: 'hidden',
+          }}>
+            {previewSource ? (
+              <View style={{ height: VS(180), backgroundColor: '#F5F0EB' }}>
+                <Image
+                  source={{ uri: previewSource }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
+              </View>
+            ) : (
+              <View style={{
+                height: VS(120), alignItems: 'center', justifyContent: 'center', gap: S(6),
+              }}>
+                <Ionicons name="person-outline" size={S(32)} color={COLORS.border} />
+                <Text style={{ fontSize: FS(13), fontWeight: '600', color: '#1A1A1A' }}>
+                  Todavía no subiste tu foto
+                </Text>
+                <Text style={{
+                  fontSize: FS(11), color: COLORS.textLight,
+                  textAlign: 'center', paddingHorizontal: S(24),
+                }}>
+                  El Probador Virtual la va a usar automáticamente
+                </Text>
+              </View>
+            )}
+
+            {uploadingPhoto && (
+              <View style={{
+                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: 'rgba(253,248,240,0.9)',
+                justifyContent: 'center', alignItems: 'center', gap: S(8),
+              }}>
+                <ActivityIndicator size="small" color={COLORS.primary} />
+                <Text style={{ fontSize: FS(12), color: COLORS.primary }}>Guardando…</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+                gap: S(6), paddingVertical: S(13),
+                borderTopWidth: 1, borderTopColor: COLORS.border,
+              }}
+              onPress={confirmChangePhoto}
+              disabled={uploadingPhoto}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={bodyPhotoUrl ? 'create-outline' : 'add-outline'}
+                size={FS(16)}
+                color={COLORS.primary}
+              />
+              <Text style={{ fontSize: FS(13), fontWeight: '600', color: COLORS.primary }}>
+                {bodyPhotoUrl ? 'Actualizar / Cambiar foto de cuerpo' : 'Subir foto de cuerpo'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
