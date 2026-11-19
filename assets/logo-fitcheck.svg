@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" rx="224" fill="#FDF8F0"/>
+
+  <!-- Doble filete dorado: da estructura sin recargar -->
+  <rect x="58" y="58" width="908" height="908" rx="196" fill="none"
+        stroke="#C9A84C" stroke-width="3" opacity="0.45"/>
+  <rect x="80" y="80" width="864" height="864" rx="178" fill="none"
+        stroke="#C9A84C" stroke-width="2" opacity="0.22"/>
+
+  <!-- Asta y travesaño medio: borgoña, trazo firme -->
+  <path d="M348 320 V780" fill="none" stroke="#6B1D2B"
+        stroke-width="38" stroke-linecap="round"/>
+  <path d="M348 542 H536" fill="none" stroke="#6B1D2B"
+        stroke-width="38" stroke-linecap="round"/>
+
+  <!-- Travesaño superior resuelto en check ascendente: oro -->
+  <path d="M348 320 H496 L556 380 L712 224" fill="none"
+        stroke="#C9A84C" stroke-width="38"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

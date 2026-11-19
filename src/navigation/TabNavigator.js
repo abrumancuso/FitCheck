@@ -25,19 +25,19 @@ const TAB_ICONS = {
 };
 
 export default function TabNavigator() {
-  const { scale, fontScale } = useAppScale();
+  const { scale } = useAppScale();
   const insets = useSafeAreaInsets();
   const S = (n) => scale(n);
-  const FS = (n) => fontScale(n);
 
-  // Altura del tab: ícono + label (S(50)) + padding inferior dinámico
-  const TAB_HEIGHT = S(50) + insets.bottom + S(8);
-  const TAB_PADDING_BOTTOM = insets.bottom + S(8);
+  // Sin etiquetas: solo íconos. Altura mínima y padding inferior dinámico.
+  const TAB_HEIGHT = S(56) + insets.bottom;
+  const TAB_PADDING_BOTTOM = insets.bottom + S(6);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+        tabBarShowLabel: false,
         tabBarIcon: ({ focused, color }) => {
           const icons = TAB_ICONS[route.name];
           return <Ionicons name={focused ? icons.focused : icons.unfocused} size={S(22)} color={color} />;
@@ -55,11 +55,6 @@ export default function TabNavigator() {
           height: TAB_HEIGHT,
           paddingBottom: TAB_PADDING_BOTTOM,
           paddingTop: S(8),
-        },
-        tabBarLabelStyle: {
-          fontSize: FS(11),
-          fontWeight: '600',
-          letterSpacing: 0.3,
         },
       })}
     >

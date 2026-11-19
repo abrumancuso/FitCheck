@@ -83,8 +83,16 @@ export default function ProfileScreen() {
   return (
     <ScreenWrapper>
       <ScrollView contentContainerStyle={{ paddingBottom: VS(40) }}>
+        {/* Título de la pantalla (la navbar ya no muestra etiquetas) */}
+        <Text style={{
+          fontSize: FS(24), fontWeight: '700', color: COLORS.primary,
+          paddingHorizontal: S(20), paddingTop: VS(12), marginBottom: S(8),
+        }}>
+          Mi Perfil
+        </Text>
+
         {/* Header */}
-        <View style={{ alignItems: 'center', paddingTop: VS(24) }}>
+        <View style={{ alignItems: 'center', paddingTop: VS(12) }}>
           {previewSource ? (
             <Image
               source={{ uri: previewSource }}

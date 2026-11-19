@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -22,10 +22,13 @@ export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleLogin = async () => {
+    setErrorMsg('');
     if (!email.trim() || !password.trim()) {
-      return Alert.alert('Atención', 'Completá todos los campos');
+      setErrorMsg('Completá todos los campos');
+      return;
     }
     setLoading(true);
     try {
@@ -37,7 +40,7 @@ export default function LoginScreen({ navigation }) {
         'Email not confirmed': 'Confirmá tu email antes de iniciar sesión',
         'Invalid email': 'Email inválido',
       };
-      Alert.alert('Error', msgs[e.message] || e.message);
+      setErrorMsg(msgs[e.message] || e.message || 'No se pudo iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -95,6 +98,17 @@ export default function LoginScreen({ navigation }) {
               />
             </View>
           </View>
+
+          {errorMsg ? (
+            <View style={{
+              backgroundColor: '#FDECEE', borderWidth: 1, borderColor: '#E6B7BE',
+              borderRadius: S(10), padding: S(12), marginBottom: S(12),
+            }}>
+              <Text style={{ color: COLORS.primary, fontSize: FS(13), textAlign: 'center' }}>
+                {errorMsg}
+              </Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={{

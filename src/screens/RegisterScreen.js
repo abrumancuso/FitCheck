@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  Alert, ActivityIndicator,
+  ActivityIndicator,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,30 +22,33 @@ export default function RegisterScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleRegister = async () => {
+    setErrorMsg('');
     if (!email.trim() || !password.trim() || !confirm.trim()) {
-      return Alert.alert('Atención', 'Completá todos los campos');
+      setErrorMsg('Completá todos los campos');
+      return;
     }
     if (password.length < 6) {
-      return Alert.alert('Atención', 'La contraseña debe tener al menos 6 caracteres');
+      setErrorMsg('La contraseña debe tener al menos 6 caracteres');
+      return;
     }
     if (password !== confirm) {
-      return Alert.alert('Atención', 'Las contraseñas no coinciden');
+      setErrorMsg('Las contraseñas no coinciden');
+      return;
     }
     setLoading(true);
     try {
       const { error } = await register(email.trim(), password);
       if (error) throw error;
-      // Supabase envía email de confirmación por defecto.
-      // Si no llega, se puede desactivar "Confirm email" en Auth > Settings
     } catch (e) {
       const msgs = {
-        'User already registered': 'Ya hay una cuenta con ese email',
+        'User already registered': 'Ya hay una cuenta con ese email. Iniciá sesión.',
         'Password should be at least 6 characters': 'Contraseña muy débil',
         'Invalid email': 'Email inválido',
       };
-      Alert.alert('Error', msgs[e.message] || e.message);
+      setErrorMsg(msgs[e.message] || e.message || 'No se pudo crear la cuenta');
     } finally {
       setLoading(false);
     }
@@ -128,6 +131,17 @@ export default function RegisterScreen({ navigation }) {
               />
             </View>
           </View>
+
+          {errorMsg ? (
+            <View style={{
+              backgroundColor: '#FDECEE', borderWidth: 1, borderColor: '#E6B7BE',
+              borderRadius: S(10), padding: S(12), marginBottom: S(12),
+            }}>
+              <Text style={{ color: COLORS.primary, fontSize: FS(13), textAlign: 'center' }}>
+                {errorMsg}
+              </Text>
+            </View>
+          ) : null}
 
           <TouchableOpacity
             style={{

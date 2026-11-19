@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
     <title>%WEB_TITLE%</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
@@ -19,7 +19,9 @@
       /* These styles make the root element full-height */
       #root {
         display: flex;
-        height: 100%;
+        height: 100vh;
+        height: 100dvh;
+        min-height: 0;
         flex: 1;
       }
     </style>
@@ -45,12 +47,37 @@
       #root > div {
         width: 428px !important;
         max-width: 100% !important;
-        height: 100% !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        min-height: 0 !important;
         align-self: stretch !important;
         margin-left: auto !important;
         margin-right: auto !important;
         background-color: #ffffff !important;
         box-shadow: 0 0 50px rgba(0, 0, 0, 0.18) !important;
+        overflow: hidden !important;
+      }
+      /* En celular no hay marco: la app se fija al viewport visible real.
+         Así la barra de tabs nunca queda debajo del browser UI. */
+      @media (max-width: 600px) {
+        html,
+        body {
+          width: 100%;
+          height: 100dvh;
+          background-color: #ffffff;
+        }
+        #root {
+          position: fixed;
+          inset: 0;
+          width: 100% !important;
+          height: 100dvh !important;
+        }
+        #root > div {
+          width: 100% !important;
+          max-width: none !important;
+          height: 100dvh !important;
+          box-shadow: none !important;
+        }
       }
     </style>
   </head>

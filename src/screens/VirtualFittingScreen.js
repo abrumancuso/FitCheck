@@ -364,6 +364,9 @@ export default function VirtualFittingScreen({ navigation, route }) {
   /** Captura imagen + watermark en caché estable (iOS purga tmp/ReactNative). */
   const captureStableResult = async () => {
     const captured = await captureRef.current.capture();
+    // En web view-shot devuelve un data URI y expo-file-system no existe:
+    // se usa directo, readImageBytes lo convierte con fetch.
+    if (Platform.OS === 'web' || /^data:/i.test(captured)) return captured;
     const stable = new File(Paths.cache, `outfit-ia-${Date.now()}.png`);
     await new File(captured).copy(stable);
     return stable.uri;

@@ -17,9 +17,9 @@
  */
 
 import { Platform, Alert } from 'react-native';
-import { File } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../config/supabaseClient';
+import { readImageBytes } from '../utils/imageBytes';
 
 const BUCKET = 'clothing-images';
 const bodyPhotoPath = (userId) => `users/${userId}/body/body.jpg`;
@@ -103,9 +103,8 @@ export const uploadBodyPhoto = async (userId, imageUri, currentMetadata = {}) =>
   const path = bodyPhotoPath(userId);
   const contentType = /\.png(\?|#|$)/i.test(imageUri) ? 'image/png' : 'image/jpeg';
 
-  // Mismo patrón que storageService.js (expo-file-system v19 / File).
-  const imageFile = new File(imageUri);
-  const arrayBuffer = await imageFile.arrayBuffer();
+  // Mismo patrón que storageService.js: nativo con File, web con fetch.
+  const arrayBuffer = await readImageBytes(imageUri);
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)

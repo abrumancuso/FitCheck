@@ -42,8 +42,14 @@ export function AuthProvider({ children }) {
     return supabase.auth.signInWithPassword({ email, password });
   };
 
-  const register = (email, password) => {
-    return supabase.auth.signUp({ email, password });
+  const register = async (email, password) => {
+    const result = await supabase.auth.signUp({ email, password });
+    // En la web el evento onAuthStateChange a veces no llega a tiempo.
+    // Seteamos el usuario desde la propia respuesta para entrar igual.
+    if (result.data?.session?.user) {
+      setUser(result.data.session.user);
+    }
+    return result;
   };
 
   const logout = () => {

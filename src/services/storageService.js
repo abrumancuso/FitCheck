@@ -2,12 +2,12 @@
  * storageService.js — Upload de imágenes a Supabase Storage
  * ==========================================================
  *
- * Lee el archivo como ArrayBuffer usando la API moderna de
- * expo-file-system v19 (clase File), y lo pasa directo a Supabase.
+ * Lee el archivo como ArrayBuffer con un helper que funciona en nativo
+ * (expo-file-system) y en web (fetch del URI blob: del image picker).
  */
 
-import { File } from 'expo-file-system';
 import { supabase } from '../config/supabaseClient';
+import { readImageBytes } from '../utils/imageBytes';
 
 const BUCKET = 'clothing-images';
 
@@ -25,9 +25,8 @@ export const uploadClothingImage = async (userId, itemId, imageUri) => {
 
   const filePath = `users/${userId}/clothing/${itemId}.png`;
 
-  // 1. Leer el archivo como ArrayBuffer (API moderna expo-file-system v19)
-  const imageFile = new File(imageUri);
-  const arrayBuffer = await imageFile.arrayBuffer();
+  // 1. Leer el archivo como ArrayBuffer (nativo o web)
+  const arrayBuffer = await readImageBytes(imageUri);
   console.log('[storage] arrayBuffer bytes:', arrayBuffer.byteLength);
 
   // 2. Subir a Supabase Storage
@@ -62,8 +61,7 @@ export const uploadOutfitImage = async (userId, imageUri) => {
   const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`;
   const filePath = `users/${userId}/outfits/${fileName}`;
 
-  const imageFile = new File(imageUri);
-  const arrayBuffer = await imageFile.arrayBuffer();
+  const arrayBuffer = await readImageBytes(imageUri);
 
   const { error } = await supabase.storage.from(BUCKET).upload(filePath, arrayBuffer, {
     contentType: 'image/png',
